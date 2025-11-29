@@ -1,0 +1,53 @@
+### Test Kayak Vending Machine API
+### Make sure the backend server is running on http://localhost:5000
+
+### 1. Test Server Connection
+GET http://localhost:5000/api
+
+###
+
+### 2. User Signup
+POST http://localhost:5000/api/auth/signup
+Content-Type: application/json
+
+{
+  "username": "johndoe",
+  "email": "john@example.com",
+  "password": "password123"
+}
+
+###
+
+### 3. User Login
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "password123"
+}
+
+###
+
+### 4. Sign Waiver
+POST http://localhost:5000/api/waiver/sign
+Content-Type: application/json
+
+{
+  "userId": "USER_ID_FROM_SIGNUP",
+  "signature": "John Doe"
+}
+
+###
+
+### 5. Rent Kayak
+POST http://localhost:5000/api/rental/rent
+Content-Type: application/json
+
+{
+  "userId": "USER_ID_FROM_SIGNUP",
+  "kayakId": "kayak001",
+  "rentalDuration": 3600
+}
+
+###
