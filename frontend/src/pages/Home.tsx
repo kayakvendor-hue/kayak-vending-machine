@@ -108,7 +108,6 @@ const Home: React.FC = () => {
                                 fontWeight: '700',
                                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                             }}>
-                        >
                             View Current Rental
                         </button>
                     </div>
