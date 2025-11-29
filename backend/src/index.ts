@@ -9,7 +9,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true
+}));
 app.use(express.json({ limit: '50mb' })); // Increase limit for base64 image uploads
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
