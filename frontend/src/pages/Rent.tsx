@@ -131,6 +131,7 @@ const Rent: React.FC = () => {
 
     const handlePaymentSuccess = async (paymentId: string) => {
         try {
+            console.log('Payment successful, creating rental...');
             // Complete the rental immediately after payment
             const response = await api.post('/api/rental/rent', {
                 kayakQuantity,
@@ -138,6 +139,7 @@ const Rent: React.FC = () => {
                 paymentIntentId: paymentId
             });
             
+            console.log('Rental created successfully:', response.data);
             setAssignedKayaks(response.data.rentals);
             
             // Navigate to passcode page with multiple kayak info
@@ -147,8 +149,11 @@ const Rent: React.FC = () => {
                 amount: rentalAmount
             });
         } catch (err) {
-            setError('Failed to complete rental. Please contact support.');
+            console.error('Rental creation failed:', err);
+            setError('Payment succeeded but rental creation failed. Please check "My Rentals" or contact support.');
             setShowPayment(false);
+            // Re-throw so Payment component knows there was an error
+            throw err;
         }
     };
 
