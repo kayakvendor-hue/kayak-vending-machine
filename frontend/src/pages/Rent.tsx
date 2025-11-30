@@ -141,19 +141,30 @@ const Rent: React.FC = () => {
             
             console.log('Rental created successfully:', response.data);
             setAssignedKayaks(response.data.rentals);
+            setShowPayment(false);
             
             // Navigate to passcode page with multiple kayak info
-            history.push('/passcode', { 
-                rentals: response.data.rentals,
-                duration: rentalDuration,
-                amount: rentalAmount
-            });
+            setTimeout(() => {
+                history.push('/passcode', { 
+                    rentals: response.data.rentals,
+                    duration: rentalDuration,
+                    amount: rentalAmount
+                });
+            }, 100);
         } catch (err) {
             console.error('Rental creation failed:', err);
+            // Check if it's a network error vs actual failure
+            if (err && typeof err === 'object' && 'response' in err) {
+                const error = err as any;
+                if (error.response?.status === 201 || error.response?.status === 200) {
+                    // Success response, just navigate to rentals
+                    setTimeout(() => history.push('/rentals'), 100);
+                    return;
+                }
+            }
             setError('Payment succeeded but rental creation failed. Please check "My Rentals" or contact support.');
             setShowPayment(false);
-            // Re-throw so Payment component knows there was an error
-            throw err;
+            // Don't re-throw - let user navigate to rentals manually
         }
     };
 

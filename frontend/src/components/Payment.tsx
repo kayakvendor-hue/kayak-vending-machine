@@ -86,10 +86,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, rentalDurati
                 // Payment successful - call success handler
                 try {
                     await onSuccess(paymentIntentId);
+                    // Success handler completed without error
                 } catch (successError) {
                     console.error('Error in payment success handler:', successError);
-                    setError('Payment succeeded but rental creation failed. Please contact support.');
-                    setProcessing(false);
+                    // Don't show error if the rental was actually created
+                    // The success handler will manage its own error display
                 }
             } else {
                 setError('Payment could not be completed. Please try again.');
