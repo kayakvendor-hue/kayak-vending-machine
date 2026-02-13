@@ -4,10 +4,11 @@
   "description": "Backend for the kayak vending machine application",
   "main": "src/index.ts",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "start": "node dist/index.js",
     "build": "tsc",
     "dev": "ts-node-dev src/index.ts",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "@types/bcrypt": "^6.0.0",
