@@ -21,7 +21,7 @@ class WaiverController {
             }
 
             // Send waiver confirmation email
-            await emailService.sendWaiverConfirmation(user.email, user.name || user.username);
+            await emailService.sendWaiverConfirmation(user.email, user.name || user.username || 'User');
             
             res.status(200).json({ 
                 success: true, 

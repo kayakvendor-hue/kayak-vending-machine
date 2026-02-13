@@ -188,7 +188,7 @@ class RentalController {
                 // Send email confirmation
                 await emailService.sendRentalConfirmation(
                     user.email,
-                    user.name || user.username,
+                    user.name || user.username || 'User',
                     quantity > 1 ? `${quantity} kayaks` : firstKayak.kayakName,
                     firstKayak.passcode,
                     rentalEnd,
@@ -302,7 +302,7 @@ class RentalController {
                 // Send email confirmation
                 await emailService.sendReturnConfirmation(
                     user.email,
-                    user.name,
+                    user.name || user.username || 'User',
                     kayak.name
                 );
 

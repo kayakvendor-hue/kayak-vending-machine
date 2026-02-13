@@ -49,7 +49,7 @@ export const requireAdmin = async (req: AuthRequest, res: Response, next: NextFu
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (user.role !== 'admin') {
+        if (!user.isAdmin) {
             return res.status(403).json({ success: false, message: 'Admin access required' });
         }
 

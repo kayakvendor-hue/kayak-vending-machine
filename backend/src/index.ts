@@ -44,10 +44,7 @@ app.get('/api', (req, res) => {
 
 app.use('/api', routes);
 
-mongoose.connect(process.env.DATABASE_URL as string, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
+mongoose.connect(process.env.DATABASE_URL as string)
 .then(() => {
     console.log('Database connected successfully');
 })
