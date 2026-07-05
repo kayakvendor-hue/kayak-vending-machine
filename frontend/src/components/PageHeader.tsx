@@ -11,17 +11,18 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     icon, 
     title, 
     subtitle,
-    backgroundColor = '#5b21b6'
+    backgroundColor = '#0d2b38'
 }) => {
     return (
         <div style={{ 
             textAlign: 'center',
             backgroundColor,
             color: 'white',
-            padding: '30px 20px',
-            borderRadius: '12px',
-            marginBottom: '30px',
-            boxShadow: '0 4px 16px rgba(91,33,182,0.4)'
+            padding: '28px 20px',
+            borderRadius: '24px',
+            marginBottom: '24px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 18px 40px rgba(0,0,0,0.22)'
         }}>
             <h1 style={{ 
                 margin: '0 0 10px 0', 
@@ -40,7 +41,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 <p style={{ 
                     margin: 0, 
                     fontSize: '1.1rem', 
-                    color: '#ffffff',
+                    color: '#cae3ea',
                     background: 'none',
                     WebkitBackgroundClip: 'unset',
                     WebkitTextFillColor: 'white',

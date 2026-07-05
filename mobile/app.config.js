@@ -1,0 +1,31 @@
+module.exports = {
+  expo: {
+    name: 'mobile-app',
+    slug: 'mobile-app',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/images/icon.png',
+    scheme: 'mobileapp',
+    userInterfaceStyle: 'automatic',
+    ios: {
+      icon: './assets/expo.icon',
+    },
+    android: {
+      adaptiveIcon: {
+        backgroundColor: '#E6F4FE',
+        foregroundImage: './assets/images/android-icon-foreground.png',
+        backgroundImage: './assets/images/android-icon-background.png',
+        monochromeImage: './assets/images/android-icon-monochrome.png',
+      },
+      predictiveBackGestureEnabled: false,
+    },
+    web: {
+      output: 'static',
+      favicon: './assets/images/favicon.png',
+    },
+    plugins: ['expo-router'],
+    extra: {
+      stripePublishableKey: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+    },
+  },
+};

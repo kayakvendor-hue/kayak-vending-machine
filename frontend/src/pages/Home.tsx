@@ -1,321 +1,322 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import MediaGallery from '../components/MediaGallery';
+
+const featureCards = [
+    {
+        icon: '⚡',
+        title: 'Fast sign in',
+        body: 'Use the same account flow on web and mobile, with a clear next step every time.',
+    },
+    {
+        icon: '✍️',
+        title: 'Waiver first',
+        body: 'Keep the liability step obvious and consistent before rentals begin.',
+    },
+    {
+        icon: '🛶',
+        title: 'Rental ready',
+        body: 'The front door is now cleanly separated from the actual rental flow.',
+    },
+];
+
+const flowSteps = [
+    { num: '1', title: 'Create or access your account', desc: 'Use sign up or sign in to get into the app.' },
+    { num: '2', title: 'Review the waiver', desc: 'Complete the waiver before rental actions start.' },
+    { num: '3', title: 'Continue to rentals', desc: 'The app is ready for the next stage later.' },
+];
 
 const Home: React.FC = () => {
     const history = useHistory();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
-        // Check if user has a token
-        const token = localStorage.getItem('token');
-        
-        if (token) {
-            setIsLoggedIn(true);
-        }
-
-        // Listen for auth changes
-        const handleAuthChange = () => {
+        const updateAuthState = () => {
             setIsLoggedIn(!!localStorage.getItem('token'));
         };
 
-        window.addEventListener('auth-change', handleAuthChange);
+        updateAuthState();
+        window.addEventListener('auth-change', updateAuthState);
 
         return () => {
-            window.removeEventListener('auth-change', handleAuthChange);
+            window.removeEventListener('auth-change', updateAuthState);
         };
     }, []);
 
     return (
         <div className="page-container">
-            {/* Hero Section */}
-            <div style={{ 
-                textAlign: 'center',
-                backgroundColor: '#5b21b6',
-                color: 'white',
-                padding: '60px 20px',
-                borderRadius: '16px',
-                marginBottom: '40px',
-                boxShadow: '0 8px 32px rgba(91,33,182,0.4)'
-            }}>
-                <h1 style={{ 
-                    fontSize: '3rem', 
-                    margin: '0 0 20px 0',
-                    fontWeight: '900',
-                    color: '#fff',
-                    background: 'none',
-                    WebkitBackgroundClip: 'unset',
-                    WebkitTextFillColor: 'white',
-                    letterSpacing: '-0.5px',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-                }}>
-                    🚣 Kayak Vending Machine
-                </h1>
-                <p style={{ 
-                    fontSize: '1.4rem', 
-                    margin: '0 0 30px 0',
-                    color: '#fff',
-                    maxWidth: '600px',
-                    marginLeft: 'auto',
-                    marginRight: 'auto',
-                    fontWeight: '500',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-                }}>
-                    Rent kayaks easily and securely with instant passcode access
+            <section style={styles.heroCard}>
+                <div style={styles.heroTopRow}>
+                    <div style={styles.brandBadge}>KM</div>
+                    <div style={styles.statusPill}>{isLoggedIn ? 'Waiver ready' : 'Action required'}</div>
+                </div>
+
+                <p style={styles.kicker}>Kayak Vending Machine</p>
+                <h1 style={styles.title}>A cleaner web front door that matches the mobile app.</h1>
+                <p style={styles.body}>
+                    Sign in, create an account, and complete the waiver with the same visual language across both platforms.
                 </p>
-                
-                <button 
-                    onClick={() => history.push('/rent')}
-                    style={{ 
-                        backgroundColor: '#a78bfa',
-                        color: '#ffffff',
-                        fontSize: '1.3rem',
-                        padding: '16px 40px',
-                        border: 'none',
-                        borderRadius: '50px',
-                        cursor: 'pointer',
-                        fontWeight: '700',
-                        boxShadow: '0 4px 16px rgba(167,139,250,0.4)',
-                        transition: 'all 0.2s',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-                    }}
-                    onMouseOver={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                        e.currentTarget.style.boxShadow = '0 6px 24px rgba(167,139,250,0.6)';
-                        e.currentTarget.style.backgroundColor = '#c4b5fd';
-                    }}
-                    onMouseOut={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(167,139,250,0.4)';
-                        e.currentTarget.style.backgroundColor = '#a78bfa';
-                    }}
-                >
-                    Rent a Kayak Now →
-                </button>
 
-                {isLoggedIn && (
-                    <div style={{ marginTop: '20px' }}>
-                        <button 
-                            onClick={() => history.push('/passcode')}
-                            style={{ 
-                                backgroundColor: 'transparent',
-                                color: '#fff',
-                                fontSize: '1rem',
-                                padding: '12px 30px',
-                                border: '3px solid #fff',
-                                borderRadius: '50px',
-                                cursor: 'pointer',
-                                fontWeight: '700',
-                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-                            }}>
-                            View Current Rental
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Features Section */}
-            <div style={{ 
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                gap: '30px',
-                marginBottom: '40px'
-            }}>
-                <div style={{
-                    textAlign: 'center',
-                    padding: '30px',
-                    backgroundColor: '#f8f9ff',
-                    borderRadius: '12px',
-                    border: '2px solid #e0e7ff'
-                }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '15px' }}>⚡</div>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#667eea' }}>Instant Access</h3>
-                    <p style={{ margin: 0, color: '#666', lineHeight: '1.6' }}>
-                        Pay online and get your kayak passcode immediately. No waiting in line!
-                    </p>
+                <div style={styles.statsRow}>
+                    <StatChip value="3" label="front-door steps" />
+                    <StatChip value="1" label="shared design system" />
+                    <StatChip value="100%" label="mobile-friendly" />
                 </div>
 
-                <div style={{
-                    textAlign: 'center',
-                    padding: '30px',
-                    backgroundColor: '#f8f9ff',
-                    borderRadius: '12px',
-                    border: '2px solid #e0e7ff'
-                }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '15px' }}>💳</div>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#667eea' }}>Secure Payment</h3>
-                    <p style={{ margin: 0, color: '#666', lineHeight: '1.6' }}>
-                        Safe and encrypted payments through Stripe. Your card info is never stored.
-                    </p>
+                <div style={styles.heroActions}>
+                    <button onClick={() => history.push('/login')}>Sign in</button>
+                    <button onClick={() => history.push('/signup')} style={styles.secondaryButton}>Create account</button>
                 </div>
 
-                <div style={{
-                    textAlign: 'center',
-                    padding: '30px',
-                    backgroundColor: '#f8f9ff',
-                    borderRadius: '12px',
-                    border: '2px solid #e0e7ff'
-                }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '15px' }}>📱</div>
-                    <h3 style={{ margin: '0 0 10px 0', color: '#667eea' }}>Easy Returns</h3>
-                    <p style={{ margin: 0, color: '#666', lineHeight: '1.6' }}>
-                        Return anytime from your phone. Take a photo and you're done!
-                    </p>
+                <div style={styles.heroLinks}>
+                    <button onClick={() => history.push('/waiver')} style={styles.ghostButton}>Open waiver</button>
+                    {isLoggedIn && (
+                        <button onClick={() => history.push('/account')} style={styles.ghostButton}>My rentals</button>
+                    )}
                 </div>
-            </div>
+            </section>
 
-            {/* Pricing Preview */}
-            <div style={{
-                backgroundColor: '#fff9e6',
-                border: '2px solid #ffc107',
-                borderRadius: '12px',
-                padding: '30px',
-                textAlign: 'center',
-                marginBottom: '40px'
-            }}>
-                <h2 style={{ margin: '0 0 20px 0', color: '#f57c00' }}>💰 Affordable Hourly Rates</h2>
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    gap: '20px',
-                    flexWrap: 'wrap'
-                }}>
-                    <div style={{ fontSize: '1.1rem', color: '#666' }}>
-                        <strong>1 Hour:</strong> $10
-                    </div>
-                    <div style={{ fontSize: '1.1rem', color: '#666' }}>
-                        <strong>2 Hours:</strong> $18 <span style={{ color: '#4CAF50', fontSize: '0.9rem' }}>(Save 10%)</span>
-                    </div>
-                    <div style={{ fontSize: '1.1rem', color: '#666' }}>
-                        <strong>4 Hours:</strong> $32 <span style={{ color: '#4CAF50', fontSize: '0.9rem' }}>(Save 20%)</span>
-                    </div>
-                    <div style={{ fontSize: '1.1rem', color: '#666' }}>
-                        <strong>8 Hours:</strong> $50 <span style={{ color: '#4CAF50', fontSize: '0.9rem', fontWeight: 'bold' }}>(Best Value!)</span>
-                    </div>
+            <section style={styles.section}>
+                <SectionHeading title="What this web app covers" subtitle="The landing experience now mirrors the mobile app: focused, card-based, and teal/navy rather than purple." />
+                <div style={styles.cardGrid}>
+                    {featureCards.map((card) => (
+                        <InfoCard key={card.title} {...card} />
+                    ))}
                 </div>
-            </div>
+            </section>
 
-            {/* How It Works */}
-            {/* Uncomment when ready to add media files
-            <MediaGallery 
-                title="📱 How It Works"
-                items={[
-                    {
-                        type: 'video',
-                        title: 'Operating the Machine',
-                        description: 'Watch how easy it is to use your passcode and unlock your kayak from the vending machine.',
-                        placeholder: 'Place video: machine-operation.mp4'
-                    },
-                    {
-                        type: 'image',
-                        title: 'The Locker System',
-                        description: 'See our secure locker system where your kayak is safely stored until you\'re ready.',
-                        placeholder: 'Place image: locker-system.jpg'
-                    },
-                    {
-                        type: 'video',
-                        title: 'Entering the Water',
-                        description: 'Learn the best technique for safely entering the water with your kayak.',
-                        placeholder: 'Place video: water-entry.mp4'
-                    },
-                    {
-                        type: 'video',
-                        title: 'Returning Your Kayak',
-                        description: 'Step-by-step guide on returning your kayak and taking the required photo.',
-                        placeholder: 'Place video: kayak-return.mp4'
-                    }
-                ]}
-            />
-            */}
-
-            {/* Step-by-step Process */}
-            <div style={{ marginBottom: '40px' }}>
-                <h2 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>Simple 4-Step Process</h2>
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '20px'
-                }}>
-                    {[
-                        { num: '1', title: 'Choose Duration', desc: 'Select how many hours you need' },
-                        { num: '2', title: 'Pay Securely', desc: 'Complete payment with your card' },
-                        { num: '3', title: 'Get Passcode', desc: 'Receive instant access code' },
-                        { num: '4', title: 'Start Paddling', desc: 'Unlock and enjoy your adventure!' }
-                    ].map(step => (
-                        <div key={step.num} style={{
-                            textAlign: 'center',
-                            padding: '20px',
-                            backgroundColor: 'white',
-                            borderRadius: '8px',
-                            border: '1px solid #e0e0e0'
-                        }}>
-                            <div style={{
-                                width: '50px',
-                                height: '50px',
-                                borderRadius: '50%',
-                                backgroundColor: '#667eea',
-                                color: 'white',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.5rem',
-                                fontWeight: 'bold',
-                                margin: '0 auto 15px'
-                            }}>
-                                {step.num}
+            <section style={styles.section}>
+                <SectionHeading title="Simple flow" subtitle="The home page should make the next step obvious, regardless of device." />
+                <div style={styles.stepList}>
+                    {flowSteps.map((step) => (
+                        <div key={step.num} style={styles.stepCard}>
+                            <div style={styles.stepBadge}>{step.num}</div>
+                            <div style={styles.stepContent}>
+                                <h3 style={styles.stepTitle}>{step.title}</h3>
+                                <p style={styles.stepBody}>{step.desc}</p>
                             </div>
-                            <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>{step.title}</h4>
-                            <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>{step.desc}</p>
                         </div>
                     ))}
                 </div>
-            </div>
+            </section>
 
-            {/* CTA Footer */}
             {!isLoggedIn && (
-                <div style={{
-                    textAlign: 'center',
-                    padding: '40px 20px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '12px'
-                }}>
-                    <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>Ready to get started?</h3>
-                    <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button 
-                            onClick={() => history.push('/signup')}
-                            style={{ 
-                                backgroundColor: '#667eea',
-                                color: 'white',
-                                fontSize: '1.1rem',
-                                padding: '14px 32px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            Sign Up Free
-                        </button>
-                        <button 
-                            onClick={() => history.push('/login')}
-                            style={{ 
-                                backgroundColor: 'white',
-                                color: '#667eea',
-                                fontSize: '1.1rem',
-                                padding: '14px 32px',
-                                border: '2px solid #667eea',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            Log In
-                        </button>
+                <section style={styles.ctaPanel}>
+                    <h2 style={styles.ctaTitle}>Ready to get started?</h2>
+                    <div style={styles.ctaActions}>
+                        <button onClick={() => history.push('/signup')}>Sign up free</button>
+                        <button onClick={() => history.push('/login')} style={styles.secondaryButton}>Log in</button>
                     </div>
-                </div>
+                </section>
             )}
         </div>
     );
+};
+
+function SectionHeading({ title, subtitle }: { title: string; subtitle: string }) {
+    return (
+        <div style={styles.sectionHeading}>
+            <h2 style={styles.sectionTitle}>{title}</h2>
+            <p style={styles.sectionSubtitle}>{subtitle}</p>
+        </div>
+    );
+}
+
+function InfoCard({ icon, title, body }: { icon: string; title: string; body: string }) {
+    return (
+        <article style={styles.infoCard}>
+            <div style={styles.infoIcon}>{icon}</div>
+            <h3 style={styles.infoTitle}>{title}</h3>
+            <p style={styles.infoBody}>{body}</p>
+        </article>
+    );
+}
+
+function StatChip({ value, label }: { value: string; label: string }) {
+    return (
+        <div style={styles.statChip}>
+            <div style={styles.statValue}>{value}</div>
+            <div style={styles.statLabel}>{label}</div>
+        </div>
+    );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+    heroCard: {
+        background: '#0d2b38',
+        borderRadius: '28px',
+        padding: '24px',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 18px 40px rgba(0,0,0,0.22)',
+        display: 'grid',
+        gap: '16px',
+        color: '#f6fbff',
+    },
+    heroTopRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '12px',
+        flexWrap: 'wrap',
+    },
+    brandBadge: {
+        width: '48px',
+        height: '48px',
+        borderRadius: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#18b7a0',
+        fontWeight: 900,
+        color: '#ffffff',
+    },
+    statusPill: {
+        padding: '8px 12px',
+        borderRadius: '999px',
+        background: 'rgba(24, 183, 160, 0.16)',
+        color: '#cae3ea',
+        fontWeight: 800,
+        fontSize: '0.85rem',
+    },
+    kicker: {
+        margin: 0,
+        color: '#9ed8d0',
+        textTransform: 'uppercase',
+        letterSpacing: '1.4px',
+        fontSize: '0.8rem',
+        fontWeight: 800,
+    },
+    title: {
+        margin: 0,
+        color: '#f6fbff',
+        fontSize: 'clamp(2.2rem, 5vw, 3.4rem)',
+        lineHeight: 1.1,
+        fontWeight: 900,
+        maxWidth: '14ch',
+    },
+    body: {
+        margin: 0,
+        color: '#cae3ea',
+        fontSize: '1.05rem',
+        lineHeight: 1.7,
+        maxWidth: '60ch',
+    },
+    statsRow: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '12px',
+    },
+    statChip: {
+        background: 'rgba(255,255,255,0.07)',
+        borderRadius: '18px',
+        padding: '14px',
+    },
+    statValue: {
+        fontSize: '1.3rem',
+        fontWeight: 900,
+        color: '#f6fbff',
+    },
+    statLabel: {
+        marginTop: '4px',
+        fontSize: '0.85rem',
+        color: '#cae3ea',
+    },
+    heroActions: {
+        display: 'flex',
+        gap: '12px',
+        flexWrap: 'wrap',
+    },
+    heroLinks: {
+        display: 'flex',
+        gap: '12px',
+        flexWrap: 'wrap',
+    },
+    ghostButton: {
+        background: 'transparent',
+        color: '#cae3ea',
+        border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: '999px',
+        padding: '0.9rem 1.2rem',
+        boxShadow: 'none',
+        marginTop: 0,
+        width: 'auto',
+    },
+    secondaryButton: {
+        background: '#e8f7f4',
+        color: '#0b7d6e',
+        boxShadow: '0 10px 24px rgba(11,125,110,0.18)',
+        marginTop: 0,
+    },
+    section: {
+        marginTop: '1.5rem',
+        display: 'grid',
+        gap: '12px',
+    },
+    sectionHeading: {
+        display: 'grid',
+        gap: '4px',
+    },
+    sectionTitle: {
+        margin: 0,
+        textAlign: 'left',
+        color: '#f6fbff',
+        fontSize: '1.7rem',
+        fontWeight: 900,
+    },
+    sectionSubtitle: {
+        margin: 0,
+        color: '#bcd4db',
+        lineHeight: 1.6,
+    },
+    cardGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '12px',
+    },
+    infoCard: {
+        background: '#ffffff',
+        borderRadius: '22px',
+        padding: '18px',
+        display: 'grid',
+        gap: '8px',
+        boxShadow: '0 10px 24px rgba(0,0,0,0.12)',
+    },
+    infoIcon: { fontSize: '1.8rem' },
+    infoTitle: { margin: 0, color: '#0f2c3a', fontSize: '1.1rem', fontWeight: 800 },
+    infoBody: { margin: 0, color: '#4d6470', lineHeight: 1.6 },
+    stepList: { display: 'grid', gap: '12px' },
+    stepCard: {
+        display: 'flex',
+        gap: '12px',
+        alignItems: 'flex-start',
+        background: '#ffffff',
+        borderRadius: '22px',
+        padding: '16px',
+        boxShadow: '0 10px 24px rgba(0,0,0,0.12)',
+    },
+    stepBadge: {
+        width: '46px',
+        height: '46px',
+        borderRadius: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#e8f7f4',
+        color: '#0b7d6e',
+        fontWeight: 900,
+    },
+    stepContent: { display: 'grid', gap: '4px' },
+    stepTitle: { margin: 0, color: '#0f2c3a', fontSize: '1.05rem', fontWeight: 800 },
+    stepBody: { margin: 0, color: '#536b76', lineHeight: 1.6 },
+    ctaPanel: {
+        marginTop: '1.5rem',
+        background: '#f4d35e',
+        borderRadius: '24px',
+        padding: '20px',
+        display: 'grid',
+        gap: '12px',
+    },
+    ctaTitle: { margin: 0, color: '#17414e', fontSize: '1.4rem', fontWeight: 900 },
+    ctaActions: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
 };
 
 export default Home;

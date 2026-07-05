@@ -28,18 +28,19 @@ const Navbar: React.FC = () => {
     };
 
     const linkStyle = (path: string) => ({
-        padding: '8px 16px',
-        borderRadius: '8px',
-        backgroundColor: isActivePath(path) ? '#667eea' : 'transparent',
-        color: isActivePath(path) ? 'white' : 'inherit',
-        fontWeight: isActivePath(path) ? 'bold' : 'normal',
+        padding: '10px 16px',
+        borderRadius: '999px',
+        backgroundColor: isActivePath(path) ? 'rgba(24, 183, 160, 0.16)' : 'transparent',
+        color: isActivePath(path) ? 'white' : '#cae3ea',
+        fontWeight: isActivePath(path) ? '800' : '700',
         transition: 'all 0.2s'
     });
 
     return (
         <nav style={{
-            backgroundColor: 'white',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            backgroundColor: 'rgba(7, 28, 36, 0.78)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
             padding: '0',
             marginBottom: '20px',
             width: '100%'
@@ -85,8 +86,8 @@ const Navbar: React.FC = () => {
                             to="/profile" 
                             style={{
                                 ...linkStyle('/profile'),
-                                border: '2px solid #667eea',
-                                color: isActivePath('/profile') ? 'white' : '#667eea'
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                color: isActivePath('/profile') ? 'white' : '#cae3ea'
                             }}
                         >
                             👤 Profile
@@ -95,11 +96,11 @@ const Navbar: React.FC = () => {
                         <Link 
                             to="/login"
                             style={{
-                                padding: '8px 20px',
-                                borderRadius: '8px',
-                                backgroundColor: '#667eea',
+                                padding: '10px 20px',
+                                borderRadius: '999px',
+                                backgroundColor: '#0b7d6e',
                                 color: 'white',
-                                fontWeight: 'bold'
+                                fontWeight: '800'
                             }}
                         >
                             Login / Sign Up

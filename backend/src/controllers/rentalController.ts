@@ -8,6 +8,7 @@ import emailService from '../services/emailService';
 import smsService from '../services/smsService';
 import paymentService from '../services/paymentService';
 import { uploadImage } from '../utils/imageUpload';
+import { getUserWaiverState } from '../utils/waiverStatus';
 
 // Tiered pricing structure with discounts
 const PRICING_TIERS = {
@@ -31,6 +32,8 @@ class RentalController {
         this.rentKayak = this.rentKayak.bind(this);
         this.getRentalHistory = this.getRentalHistory.bind(this);
         this.returnKayak = this.returnKayak.bind(this);
+        this.generatePasscode = this.generatePasscode.bind(this);
+        this.remoteUnlock = this.remoteUnlock.bind(this);
     }
 
     private getTTLockService(): TTLockService {
@@ -52,7 +55,7 @@ class RentalController {
 
     public async getAvailableKayaks(req: AuthRequest, res: Response): Promise<void> {
         try {
-            const kayaks = await Kayak.find({ isAvailable: true });
+            const kayaks = await Kayak.find({}).sort({ createdAt: 1 });
             res.status(200).json(kayaks);
         } catch (error) {
             res.status(500).json({ message: 'Error fetching kayaks', error });
@@ -64,41 +67,71 @@ class RentalController {
         const { kayakId, kayakQuantity, rentalDuration, paymentIntentId, pickupPhoto } = req.body;
 
         try {
-            // Check if user has signed waiver
+            // Check if user has a current waiver on file
             const user = await User.findById(userId);
             if (!user) {
                 res.status(404).json({ success: false, message: 'User not found' });
                 return;
             }
 
-            if (!user.waiverSigned) {
+            const waiverState = await getUserWaiverState(String(userId));
+
+            if (!waiverState.signed) {
                 res.status(403).json({ 
                     success: false, 
-                    message: 'Please sign the liability waiver before renting',
+                    message: waiverState.signedAt ? 'Please renew your liability waiver before renting' : 'Please sign the liability waiver before renting',
                     requiresWaiver: true
                 });
                 return;
             }
 
-            // Verify payment was successful
-            if (!paymentIntentId) {
-                res.status(400).json({ success: false, message: 'Payment required' });
-                return;
+            // Verify payment was successful (optional for now - payment flow is placeholder)
+            let paymentIntent = null;
+            if (paymentIntentId) {
+                console.log('💳 Payment intent ID provided:', paymentIntentId);
+                paymentIntent = await paymentService.getPaymentIntent(paymentIntentId);
+
+                if (paymentIntent.status !== 'succeeded') {
+                    res.status(400).json({
+                        success: false,
+                        message: 'Payment must complete before the rental can be created'
+                    });
+                    return;
+                }
+            } else {
+                console.log('⏭️  Skipping payment verification (placeholder mode)');
             }
 
-            // Handle multiple kayaks if quantity is provided
+            // Handle a single requested kayak or fall back to the next available one
             const quantity = kayakQuantity || 1;
             const rentals = [];
 
-            // Get available kayaks
-            const availableKayaks = await Kayak.find({ isAvailable: true }).limit(quantity);
-            
-            if (availableKayaks.length < quantity) {
-                res.status(400).json({ 
-                    success: false, 
-                    message: `Only ${availableKayaks.length} kayak(s) available. Requested ${quantity}.` 
-                });
-                return;
+            let availableKayaks;
+
+            if (kayakId) {
+                const requestedKayak = await Kayak.findById(kayakId);
+
+                if (!requestedKayak) {
+                    res.status(404).json({ success: false, message: 'Kayak not found' });
+                    return;
+                }
+
+                if (!requestedKayak.isAvailable) {
+                    res.status(400).json({ success: false, message: 'That kayak is currently unavailable' });
+                    return;
+                }
+
+                availableKayaks = [requestedKayak];
+            } else {
+                availableKayaks = await Kayak.find({ isAvailable: true }).limit(quantity);
+
+                if (availableKayaks.length < quantity) {
+                    res.status(400).json({ 
+                        success: false, 
+                        message: `Only ${availableKayaks.length} kayak(s) available. Requested ${quantity}.` 
+                    });
+                    return;
+                }
             }
 
             // Calculate rental times - rentalDuration is in seconds
@@ -175,11 +208,15 @@ class RentalController {
             if (user && rentals.length > 0) {
                 // Calculate rental amount from payment or use tiered pricing
                 let amount: number;
-                try {
-                    const paymentIntent = await paymentService.getPaymentIntent(paymentIntentId);
-                    amount = paymentIntent.amount / 100; // Convert cents to dollars
-                } catch (error) {
-                    // Fallback to calculated amount if payment intent retrieval fails
+                if (paymentIntent) {
+                    try {
+                        amount = paymentIntent.amount / 100; // Convert cents to dollars
+                    } catch (error) {
+                        // Fallback to calculated amount if payment intent retrieval fails
+                        amount = calculateRentalAmount(rentalDuration) * quantity;
+                    }
+                } else {
+                    // No payment intent (placeholder mode) - use calculated amount
                     amount = calculateRentalAmount(rentalDuration) * quantity;
                 }
 
@@ -225,8 +262,11 @@ class RentalController {
 
     public async returnKayak(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId;
-        const { rentalId, returnPhoto } = req.body;
+        const { rentalId } = req.body;
         const isAdminReturn = req.originalUrl.includes('/admin/');
+        
+        // Get the file from multer (req.file is added by multer middleware)
+        const file = (req as any).file;
 
         try {
             // Find the rental
@@ -249,15 +289,19 @@ class RentalController {
             }
 
             // Require return photo
-            if (!returnPhoto) {
+            if (!file) {
                 res.status(400).json({ success: false, message: 'Return photo is required' });
                 return;
             }
 
+            // Convert buffer to base64 for uploadImage
+            const base64 = file.buffer.toString('base64');
+            const base64String = `data:${file.mimetype};base64,${base64}`;
+
             // Upload return photo
             let returnPhotoUrl: string;
             try {
-                returnPhotoUrl = await uploadImage(returnPhoto, 'kayak-returns');
+                returnPhotoUrl = await uploadImage(base64String, 'kayak-returns');
                 console.log(`📸 Return photo uploaded: ${returnPhotoUrl}`);
             } catch (error) {
                 console.error('Error uploading return photo:', error);
@@ -359,6 +403,134 @@ class RentalController {
         } catch (error) {
             console.error('Error updating pickup photo:', error);
             res.status(500).json({ success: false, message: 'Error updating pickup photo', error });
+        }
+    }
+
+    /**
+     * Generate a TTLock passcode for unlocking a kayak
+     */
+    public async generatePasscode(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { kayakId } = req.body;
+
+        try {
+            console.log('🔐 Generating TTLock passcode for kayak:', kayakId);
+
+            // Find the kayak to get its lock ID
+            const kayak = await Kayak.findById(kayakId);
+            if (!kayak) {
+                res.status(404).json({ success: false, message: 'Kayak not found' });
+                return;
+            }
+
+            console.log(`🔑 Lock ID: ${kayak.lockId}`);
+
+            // Find active rental for this user and kayak
+            const rental = await Rental.findOne({
+                userId,
+                kayakId,
+                returnPhotoUrl: { $exists: false } // Not yet returned
+            });
+
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Active rental not found' });
+                return;
+            }
+
+            console.log(`📅 Rental period: ${rental.rentalStart} to ${rental.rentalEnd}`);
+
+            // Generate passcode using TTLock service
+            const ttlockService = this.getTTLockService();
+            const { passcode, passcodeId } = await ttlockService.generatePasscode(
+                Number(kayak.lockId),
+                rental.rentalStart ? rental.rentalStart.getTime() : Date.now(),
+                rental.rentalEnd ? rental.rentalEnd.getTime() : Date.now() + 3600000
+            );
+
+            console.log(`✅ Passcode generated: ${passcode} (ID: ${passcodeId})`);
+
+            // Save passcode to rental if not already saved
+            if (!rental.passcode) {
+                rental.passcode = passcode;
+                rental.passcodeId = passcodeId;
+                await rental.save();
+            }
+
+            res.status(200).json({
+                success: true,
+                passcode,
+                passcodeId,
+                lockId: kayak.lockId,
+                kayakName: kayak.name
+            });
+        } catch (error) {
+            console.error('Error generating passcode:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Failed to generate unlock passcode',
+                error: (error as any).message 
+            });
+        }
+    }
+
+    public async remoteUnlock(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { kayakId } = req.body;
+
+        try {
+            console.log('🔓 Remote unlock request for kayak:', kayakId);
+
+            // Find the kayak to get its lock ID
+            const kayak = await Kayak.findById(kayakId);
+            if (!kayak) {
+                res.status(404).json({ success: false, message: 'Kayak not found' });
+                return;
+            }
+
+            console.log(`🔑 Lock ID: ${kayak.lockId}`);
+
+            // Find active rental for this user and kayak
+            const rental = await Rental.findOne({
+                userId,
+                kayakId,
+                returnPhotoUrl: { $exists: false } // Not yet returned
+            });
+
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'No active rental found for this kayak' });
+                return;
+            }
+
+            // Check if rental is still valid
+            const now = new Date();
+            if (now > rental.rentalEnd) {
+                res.status(400).json({ success: false, message: 'Rental has expired' });
+                return;
+            }
+
+            console.log(`🔐 Sending remote unlock command via TTLock API...`);
+
+            // Call TTLock to remotely unlock the lock
+            const ttlockService = this.getTTLockService();
+            const unlocked = await ttlockService.remoteUnlock(Number(kayak.lockId));
+
+            if (unlocked) {
+                console.log(`✅ Remote unlock successful!`);
+                res.status(200).json({
+                    success: true,
+                    message: 'Kayak unlocked successfully!',
+                    kayakName: kayak.name
+                });
+            } else {
+                throw new Error('Remote unlock failed');
+            }
+        } catch (error) {
+            console.error('Error during remote unlock:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Failed to unlock kayak remotely',
+                error: (error as any).message 
+            });
         }
     }
 }

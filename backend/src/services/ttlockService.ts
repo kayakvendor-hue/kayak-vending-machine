@@ -185,6 +185,47 @@ export class TTLockService {
     }
 
     /**
+     * Remotely unlock a lock via Bluetooth using TTLock API
+     * @param lockId - The TTLock lock ID
+     * @returns Whether the unlock was successful
+     */
+    async remoteUnlock(lockId: number): Promise<boolean> {
+        await this.ensureAccessToken();
+
+        try {
+            console.log(`🔓 Sending remote unlock command to lock ${lockId}`);
+            
+            const params = {
+                clientId: this.clientId,
+                accessToken: this.accessToken!,
+                lockId: lockId.toString(),
+                date: Date.now().toString()
+            };
+
+            const response = await axios.post(
+                `${this.apiUrl}/v3/lock/unlock`,
+                null,
+                {
+                    params
+                }
+            );
+
+            console.log(`📥 TTLock unlock response:`, response.data);
+
+            if (response.data.errcode === 0) {
+                console.log(`✅ Remote unlock successful for lock ${lockId}`);
+                return true;
+            } else {
+                console.error(`❌ TTLock unlock error:`, response.data);
+                throw new Error(`TTLock error ${response.data.errcode}: ${response.data.errmsg}`);
+            }
+        } catch (error: any) {
+            console.error('❌ Failed to remote unlock:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Generate a random 6-digit passcode
      */
     private generateRandomPasscode(): string {

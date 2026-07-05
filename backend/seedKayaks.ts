@@ -21,14 +21,25 @@ const seedKayaks = async () => {
                 lockId: 25440939, // Your actual TTLock lock ID
                 isAvailable: true,
                 location: 'Dock A - Slot 1'
-            }
-            // When you get more locks, add them here:
-            // {
-            //     name: 'Kayak 2 - Red',
-            //     lockId: YOUR_LOCK_ID_HERE,
-            //     isAvailable: true,
-            //     location: 'Dock A - Slot 2'
-            // },
+            },
+            {
+                name: 'Kayak 2 - Red',
+                lockId: 25440940,
+                isAvailable: true,
+                location: 'Dock A - Slot 2'
+            },
+            {
+                name: 'Kayak 3 - Green',
+                lockId: 25440941,
+                isAvailable: true,
+                location: 'Dock A - Slot 3'
+            },
+            {
+                name: 'Kayak 4 - Yellow',
+                lockId: 25440942,
+                isAvailable: true,
+                location: 'Dock B - Slot 1'
+            },
         ]);
 
         console.log('Added kayaks:');

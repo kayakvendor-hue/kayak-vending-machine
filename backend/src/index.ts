@@ -11,6 +11,10 @@ const PORT = process.env.PORT || 5000;
 
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:3000',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'http://localhost:8083',
     'https://kayak-vending-machine-cgsj.vercel.app',
     'https://kayak-vending-machine-git-main-james-paskerts-projects.vercel.app',
 ];
@@ -44,14 +48,24 @@ app.get('/api', (req, res) => {
 
 app.use('/api', routes);
 
-mongoose.connect(process.env.DATABASE_URL as string)
-.then(() => {
-    console.log('Database connected successfully');
-})
-.catch(err => {
-    console.error('Database connection error:', err);
-});
+async function startServer() {
+    try {
+        console.log('Attempting MongoDB connection...');
+        await mongoose.connect(process.env.DATABASE_URL as string, {
+            serverSelectionTimeoutMS: 30000,
+            connectTimeoutMS: 30000,
+        });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+        console.log('Database connected successfully');
+
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (err: any) {
+        console.error('Database connection error:');
+        console.error(err);
+        process.exit(1);
+    }
+}
+
+startServer();

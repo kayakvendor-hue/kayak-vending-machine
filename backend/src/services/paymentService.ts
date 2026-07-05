@@ -63,6 +63,141 @@ export class PaymentService {
     }
 
     /**
+     * Confirm payment with Stripe token (from client-side tokenization)
+     * Token is created by Stripe on the client and sent to backend
+     */
+    public async confirmPaymentIntent(
+        paymentIntentId: string,
+        token?: string,
+        card?: any // Legacy support for direct card objects
+    ): Promise<Stripe.PaymentIntent> {
+        try {
+            const stripe = this.getStripe();
+            
+            let paymentMethodId: string;
+
+            if (token) {
+                // Token-based payment (recommended - token created on client)
+                console.log('🔐 Using tokenized payment method...');
+                paymentMethodId = token;
+            } else if (card) {
+                // For development/testing - create payment method from card
+                console.log('⚠️  Creating payment method from card data...');
+                
+                // For testing, we can use a test token instead of raw card data
+                // This avoids needing to enable raw card data APIs in Stripe dashboard
+                if (card.number === '4242424242424242' || card.number === '4242 4242 4242 4242') {
+                    console.log('🧪 Using Stripe test token for Visa...');
+                    paymentMethodId = 'tok_visa';
+                } else if (card.number === '5555555555554444' || card.number === '5555 5555 5555 4444') {
+                    console.log('🧪 Using Stripe test token for Mastercard...');
+                    paymentMethodId = 'tok_mastercard';
+                } else {
+                    // For other card numbers, try to create a payment method
+                    // This requires raw card data APIs to be enabled in Stripe dashboard
+                    const paymentMethod = await stripe.paymentMethods.create({
+                        type: 'card',
+                        card: {
+                            number: card.number,
+                            exp_month: card.exp_month,
+                            exp_year: card.exp_year,
+                            cvc: card.cvc,
+                        },
+                    });
+                    console.log('✅ Payment method created:', paymentMethod.id);
+                    paymentMethodId = paymentMethod.id;
+                }
+            } else {
+                throw new Error('Either token or card data must be provided');
+            }
+            
+            // Confirm the payment intent with the payment method
+            const confirmedPayment = await stripe.paymentIntents.confirm(paymentIntentId, {
+                payment_method: paymentMethodId,
+            });
+            
+            console.log(`✅ Payment confirmed: ${confirmedPayment.id} - Status: ${confirmedPayment.status}`);
+            return confirmedPayment;
+        } catch (error: any) {
+            console.error('❌ Payment confirmation failed:', error.message);
+            throw new Error('Payment confirmation failed: ' + error.message);
+        }
+    }
+
+    /**
+     * Create a hosted checkout session
+     */
+    public async createCheckoutSession(
+        paymentIntentId: string,
+        amount: number,
+        customerEmail: string,
+        successUrl: string,
+        cancelUrl: string
+    ): Promise<any> {
+        try {
+            const stripe = this.getStripe();
+            
+            console.log('🛒 Creating Stripe hosted checkout session...');
+            
+            // Create a checkout session using the payment intent
+            const session = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                mode: 'payment',
+                customer_email: customerEmail,
+                payment_intent_data: {
+                    setup_future_usage: 'off_session',
+                },
+                success_url: successUrl,
+                cancel_url: cancelUrl,
+            });
+            
+            console.log('✅ Checkout session created:', session.id);
+            return session;
+        } catch (error: any) {
+            console.error('❌ Checkout session creation failed:', error.message);
+            throw new Error('Checkout session creation failed: ' + error.message);
+        }
+    }
+
+    /**
+     * Create a Payment Link (official Stripe integration for mobile)
+     */
+    public async createPaymentLink(
+        amount: number,
+        customerEmail: string,
+        description: string,
+        metadata: any
+    ): Promise<Stripe.PaymentLink> {
+        try {
+            const stripe = this.getStripe();
+            
+            console.log('🔗 Creating Stripe Payment Link for $' + amount);
+            
+            const paymentLink = await stripe.paymentLinks.create({
+                line_items: [
+                    {
+                        price_data: {
+                            currency: 'usd',
+                            product_data: {
+                                name: description,
+                            },
+                            unit_amount: Math.round(amount * 100), // Convert dollars to cents
+                        },
+                        quantity: 1,
+                    },
+                ],
+                metadata: metadata,
+            });
+            
+            console.log('✅ Payment Link created:', paymentLink.url);
+            return paymentLink;
+        } catch (error: any) {
+            console.error('❌ Payment Link creation failed:', error.message);
+            throw new Error('Payment Link creation failed: ' + error.message);
+        }
+    }
+
+    /**
      * Refund a payment
      * @param paymentIntentId - The payment intent ID to refund
      * @param amount - Optional partial refund amount in dollars

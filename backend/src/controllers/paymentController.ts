@@ -6,6 +6,8 @@ import User from '../models/user';
 class PaymentController {
     constructor() {
         this.createPaymentIntent = this.createPaymentIntent.bind(this);
+        this.createPaymentLink = this.createPaymentLink.bind(this);
+        this.confirmPayment = this.confirmPayment.bind(this);
         this.getPaymentStatus = this.getPaymentStatus.bind(this);
         this.savePaymentMethod = this.savePaymentMethod.bind(this);
         this.chargeDamage = this.chargeDamage.bind(this);
@@ -18,9 +20,12 @@ class PaymentController {
         const userId = req.userId;
         const { amount, kayakId, rentalDuration } = req.body;
 
+        console.log('🔵 POST /payment/create-intent received:', { userId, amount, kayakId, rentalDuration });
+
         try {
             // Get user email for receipt
             const user = await User.findById(userId);
+            console.log('👤 User found:', user?.email);
             if (!user) {
                 res.status(404).json({ success: false, message: 'User not found' });
                 return;
@@ -35,6 +40,12 @@ class PaymentController {
                     kayakId
                 }
             );
+
+            console.log('📤 Sending response:', {
+                success: true,
+                clientSecret: paymentIntent.client_secret?.substring(0, 20) + '...',
+                paymentIntentId: paymentIntent.id
+            });
 
             res.status(200).json({
                 success: true,
@@ -52,8 +63,106 @@ class PaymentController {
     }
 
     /**
-     * Get payment intent status
+     * Create a Payment Link for mobile checkout
      */
+    public async createPaymentLink(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { amount, kayakId } = req.body;
+
+        try {
+            console.log('🔗 POST /payment/create-link received:', { userId, amount, kayakId });
+
+            // Get user email
+            const user = await User.findById(userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: 'User not found' });
+                return;
+            }
+
+            console.log('👤 User found:', user.email);
+
+            // Create a payment link
+            const paymentLink = await paymentService.createPaymentLink(
+                amount,
+                user.email,
+                `Kayak Rental - $${amount}`,
+                {
+                    userId: userId!,
+                    kayakId
+                }
+            );
+
+            console.log('📤 Sending Payment Link:', paymentLink.url);
+
+            res.status(200).json({
+                success: true,
+                url: paymentLink.url,
+                paymentLinkId: paymentLink.id
+            });
+        } catch (error: any) {
+            console.error('❌ Error creating payment link:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create payment link',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Confirm payment intent with token or card details
+     */
+    public async confirmPayment(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { paymentIntentId, token, card } = req.body;
+
+        try {
+            console.log('💳 confirmPayment called with:', { userId, paymentIntentId, hasToken: !!token, hasCard: !!card });
+
+            if (!token && !card) {
+                res.status(400).json({
+                    success: false,
+                    message: 'Either token or card data must be provided'
+                });
+                return;
+            }
+
+            // Confirm the payment intent with token (recommended) or card data (legacy)
+            const confirmedPayment = await paymentService.confirmPaymentIntent(
+                paymentIntentId,
+                token, // Token created on client
+                card   // Raw card data (not recommended)
+            );
+
+            console.log('✅ Payment confirmed:', {
+                id: confirmedPayment.id,
+                status: confirmedPayment.status,
+                amount: confirmedPayment.amount
+            });
+
+            if (confirmedPayment.status === 'succeeded') {
+                res.status(200).json({
+                    success: true,
+                    message: 'Payment successful',
+                    paymentIntentId: confirmedPayment.id,
+                    status: confirmedPayment.status
+                });
+            } else {
+                res.status(400).json({
+                    success: false,
+                    message: `Payment failed: ${confirmedPayment.status}`,
+                    status: confirmedPayment.status
+                });
+            }
+        } catch (error: any) {
+            console.error('❌ Error confirming payment:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to confirm payment',
+                error: error.message
+            });
+        }
+    }
     public async getPaymentStatus(req: AuthRequest, res: Response): Promise<void> {
         const { paymentIntentId } = req.params;
 

@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "exp": "^55.0.5",
+    "mobile": "^0.0.1",
+    "mongodb": "^7.3.0",
+    "mongoose": "^9.7.3"
+  }
+}

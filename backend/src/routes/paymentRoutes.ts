@@ -7,6 +7,12 @@ const router = express.Router();
 // Create payment intent for rental
 router.post('/create-intent', authenticate, paymentController.createPaymentIntent);
 
+// Create official Payment Link (for mobile)
+router.post('/create-link', authenticate, paymentController.createPaymentLink);
+
+// Confirm payment with card details
+router.post('/confirm-payment', authenticate, paymentController.confirmPayment);
+
 // Get payment status
 router.get('/status/:paymentIntentId', authenticate, paymentController.getPaymentStatus);
 
