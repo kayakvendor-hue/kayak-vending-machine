@@ -15,7 +15,7 @@ const getDevBackendUrl = () => {
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://kayak-vending-machine-production.up.railway.app'
+    ? 'https://web-production-ca964.up.railway.app'
     : getDevBackendUrl());
 
 console.log('🔗 API Base URL:', API_BASE_URL);
