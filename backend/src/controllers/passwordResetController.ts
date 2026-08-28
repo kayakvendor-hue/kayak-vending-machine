@@ -125,7 +125,40 @@ class PasswordResetController {
             if (password.length < 6) {
                 res.status(400).json({ 
                     success: false, 
-                    message: 'Password must be at least 6 characters' 
+                    message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special symbol' 
+                });
+                return;
+            }
+
+            // Validate password strength
+            if (!/[A-Z]/.test(password)) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Password must contain uppercase letters' 
+                });
+                return;
+            }
+
+            if (!/[a-z]/.test(password)) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Password must contain lowercase letters' 
+                });
+                return;
+            }
+
+            if (!/[0-9]/.test(password)) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Password must contain at least one number' 
+                });
+                return;
+            }
+
+            if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Password must contain at least one special symbol (!@#$%^&*...)' 
                 });
                 return;
             }

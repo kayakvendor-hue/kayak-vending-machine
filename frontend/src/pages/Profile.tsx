@@ -7,7 +7,6 @@ const Profile: React.FC = () => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
-    const [username, setUsername] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -22,11 +21,10 @@ const Profile: React.FC = () => {
         try {
             const response = await api.get('/api/auth/profile');
             if (response.data.success) {
-                const { name, phone, email, username } = response.data.user;
+                const { name, phone, email } = response.data.user;
                 setName(name || '');
                 setPhone(phone || '');
                 setEmail(email || '');
-                setUsername(username || '');
             }
             setLoading(false);
         } catch (err) {
@@ -44,8 +42,7 @@ const Profile: React.FC = () => {
         try {
             const response = await api.put('/api/auth/profile', { 
                 name, 
-                phone: phone || undefined,
-                username
+                phone: phone || undefined
             });
             
             if (response.data.success) {
@@ -86,7 +83,7 @@ const Profile: React.FC = () => {
             
             <form onSubmit={handleUpdateProfile}>
                 <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: 'white' }}>
                         Full Name:
                     </label>
                     <input
@@ -106,7 +103,7 @@ const Profile: React.FC = () => {
                 </div>
 
                 <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: 'white' }}>
                         Phone (optional):
                     </label>
                     <input
@@ -125,7 +122,7 @@ const Profile: React.FC = () => {
                 </div>
 
                 <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#666' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: 'white' }}>
                         Email (cannot be changed):
                     </label>
                     <input
@@ -140,25 +137,6 @@ const Profile: React.FC = () => {
                             border: '1px solid #ddd',
                             backgroundColor: '#f5f5f5',
                             color: '#666'
-                        }}
-                    />
-                </div>
-
-                <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                        Username:
-                    </label>
-                    <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
-                        style={{
-                            width: '100%',
-                            padding: '0.5rem',
-                            fontSize: '1rem',
-                            borderRadius: '4px',
-                            border: '1px solid #ddd'
                         }}
                     />
                 </div>

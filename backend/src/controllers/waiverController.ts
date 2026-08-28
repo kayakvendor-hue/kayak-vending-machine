@@ -11,14 +11,14 @@ class WaiverController {
             const userId = req.userId; // From auth middleware
             const { signature } = req.body;
 
-            if (!signature || !String(signature).trim()) {
-                return res.status(400).json({ success: false, message: 'Signature is required' });
-            }
+            console.log('📝 Waiver sign request from user:', userId);
 
             if (!userId) {
+                console.log('❌ User not authenticated');
                 return res.status(401).json({ success: false, message: 'Not authenticated' });
             }
             
+            console.log('🔄 Updating user record...');
             const user = await User.findByIdAndUpdate(
                 userId,
                 { waiverSigned: true },
@@ -26,27 +26,38 @@ class WaiverController {
             );
 
             if (!user) {
+                console.log('❌ User not found:', userId);
                 res.status(404).json({ success: false, message: 'User not found' });
                 return;
             }
 
+            console.log('✅ User updated');
+
+            console.log('🔄 Saving waiver record...');
             await Waiver.findOneAndUpdate(
                 { userId },
                 {
                     userId,
-                    signature: String(signature).trim(),
+                    signature: signature || 'agreed_via_checkbox', // Use 'agreed_via_checkbox' if no signature provided
                     dateSigned: new Date(),
                 },
                 { upsert: true, new: true, runValidators: true }
             );
 
+            console.log('✅ Waiver record saved');
+
             const waiverState = await getUserWaiverState(String(userId));
 
             // Send waiver confirmation email
-            await emailService.sendWaiverConfirmation(
-                user.email,
-                user.name || (user as any).username || 'User'
-            );
+            try {
+                await emailService.sendWaiverConfirmation(
+                    user.email,
+                    user.name || (user as any).username || 'User'
+                );
+                console.log('✅ Confirmation email sent');
+            } catch (emailError) {
+                console.warn('⚠️ Email sending failed (non-fatal):', emailError);
+            }
             
             res.status(200).json({ 
                 success: true, 
@@ -56,7 +67,8 @@ class WaiverController {
                 waiverExpiresAt: waiverState.expiresAt
             });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error signing waiver', error });
+            console.error('❌ Error signing waiver:', error);
+            res.status(500).json({ success: false, message: 'Error signing waiver', error: (error as any).message });
         }
     }
 

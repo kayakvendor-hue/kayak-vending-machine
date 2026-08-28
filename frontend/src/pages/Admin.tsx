@@ -13,6 +13,7 @@ interface Rental {
     createdAt: string;
     pickupPhotoUrl?: string;
     returnPhotoUrl?: string;
+    rentalStatus?: 'active' | 'completed' | 'cancelled';
 }
 
 interface Stats {
@@ -25,8 +26,16 @@ interface Stats {
     recentRentals: number;
 }
 
+interface Kayak {
+    _id: string;
+    name: string;
+    location: string;
+    description?: string;
+    isAvailable: boolean;
+}
+
 const Admin: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'stats' | 'active' | 'all'>('stats');
+    const [activeTab, setActiveTab] = useState<'stats' | 'active' | 'all' | 'kayaks'>('stats');
     const [stats, setStats] = useState<Stats | null>(null);
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [loading, setLoading] = useState(true);
@@ -41,6 +50,16 @@ const Admin: React.FC = () => {
     const [damageDescription, setDamageDescription] = useState('');
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [chargingDamage, setChargingDamage] = useState(false);
+    const [showLateFeeModal, setShowLateFeeModal] = useState(false);
+    const [selectedRentalIdForLateFee, setSelectedRentalIdForLateFee] = useState<string | null>(null);
+    const [chargingLateFee, setChargingLateFee] = useState(false);
+    const [lateFeePreview, setLateFeePreview] = useState<{hoursLate: number, feePerHour: number, totalFee: number} | null>(null);
+    const [gatewayStatus, setGatewayStatus] = useState<'online' | 'offline' | 'checking' | null>(null);
+    const [gatewayMessage, setGatewayMessage] = useState('');
+    const [kayaksList, setKayaksList] = useState<Kayak[]>([]);
+    const [editingKayakId, setEditingKayakId] = useState<string | null>(null);
+    const [editKayakForm, setEditKayakForm] = useState({ name: '', location: '', description: '' });
+    const [savingKayak, setSavingKayak] = useState(false);
 
     useEffect(() => {
         fetchStats();
@@ -51,6 +70,8 @@ const Admin: React.FC = () => {
             fetchActiveRentals();
         } else if (activeTab === 'all') {
             fetchAllRentals();
+        } else if (activeTab === 'kayaks') {
+            fetchKayaks();
         }
     }, [activeTab]);
 
@@ -80,6 +101,47 @@ const Admin: React.FC = () => {
             setRentals(response.data.rentals);
         } catch (err) {
             setError('Failed to load rentals');
+        }
+    };
+
+    const fetchKayaks = async () => {
+        try {
+            const response = await api.get('/api/admin/kayaks');
+            setKayaksList(response.data.kayaks);
+        } catch (err) {
+            setError('Failed to load kayaks');
+        }
+    };
+
+    const startEditingKayak = (kayak: Kayak) => {
+        setEditingKayakId(kayak._id);
+        setEditKayakForm({
+            name: kayak.name || '',
+            location: kayak.location || '',
+            description: kayak.description || ''
+        });
+    };
+
+    const cancelEditingKayak = () => {
+        setEditingKayakId(null);
+        setEditKayakForm({ name: '', location: '', description: '' });
+    };
+
+    const saveKayakDetails = async (kayakId: string) => {
+        setSavingKayak(true);
+        try {
+            const response = await api.put('/api/admin/kayak/details', {
+                kayakId,
+                name: editKayakForm.name,
+                location: editKayakForm.location,
+                description: editKayakForm.description
+            });
+            setKayaksList(prev => prev.map(k => k._id === kayakId ? response.data.kayak : k));
+            setEditingKayakId(null);
+        } catch (err) {
+            alert('Failed to update kayak. Please try again.');
+        } finally {
+            setSavingKayak(false);
         }
     };
 
@@ -211,6 +273,74 @@ const Admin: React.FC = () => {
         }
     };
 
+    const handleChargeLateFee = (rentalId: string, rentalEnd: string) => {
+        // Calculate hours late
+        const rentalEndTime = new Date(rentalEnd).getTime();
+        const now = new Date().getTime();
+        const hoursLate = Math.ceil((now - rentalEndTime) / (1000 * 60 * 60));
+        
+        if (hoursLate <= 0) {
+            alert('This rental has not yet ended');
+            return;
+        }
+
+        const feePerHour = 10;
+        const totalFee = hoursLate * feePerHour;
+
+        setSelectedRentalIdForLateFee(rentalId);
+        setLateFeePreview({ hoursLate, feePerHour, totalFee });
+        setShowLateFeeModal(true);
+    };
+
+    const handleSubmitLateFeeCharge = async () => {
+        if (!selectedRentalIdForLateFee) {
+            alert('No rental selected');
+            return;
+        }
+
+        setChargingLateFee(true);
+        try {
+            const response = await api.post('/api/payment/charge-late-fee', {
+                rentalId: selectedRentalIdForLateFee
+            });
+            
+            const { hoursLate, feePerHour, amount } = response.data;
+            alert(`Successfully charged $${amount.toFixed(2)} for late return (${hoursLate} hours × $${feePerHour}/hour)`);
+            setShowLateFeeModal(false);
+            setSelectedRentalIdForLateFee(null);
+            setLateFeePreview(null);
+            // Refresh rentals
+            fetchAllRentals();
+        } catch (err) {
+            const errorMsg = (err && typeof err === 'object' && 'response' in err && err.response?.data?.message) 
+                ? err.response.data.message 
+                : 'Failed to charge late fee';
+            alert(errorMsg);
+        } finally {
+            setChargingLateFee(false);
+        }
+    };
+
+    const checkGatewayStatus = async () => {
+        try {
+            setGatewayStatus('checking');
+            setGatewayMessage('Testing gateway connectivity...');
+            
+            const response = await api.get('/api/gateway/online-check');
+            
+            if (response.data.online) {
+                setGatewayStatus('online');
+                setGatewayMessage('✅ Gateway is responding');
+            } else {
+                setGatewayStatus('offline');
+                setGatewayMessage('❌ Gateway is not responding');
+            }
+        } catch (err) {
+            setGatewayStatus('offline');
+            setGatewayMessage('❌ Gateway is not responding');
+        }
+    };
+
     if (loading) {
         return <div className="page-container"><h1>Loading admin dashboard...</h1></div>;
     }
@@ -327,6 +457,33 @@ const Admin: React.FC = () => {
                 >
                     📜 All Rentals
                 </button>
+                <button
+                    onClick={() => setActiveTab('kayaks')}
+                    style={{
+                        padding: '14px 28px',
+                        backgroundColor: activeTab === 'kayaks' ? '#667eea' : 'transparent',
+                        color: activeTab === 'kayaks' ? 'white' : '#666',
+                        border: 'none',
+                        borderBottom: activeTab === 'kayaks' ? '4px solid #667eea' : 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '16px',
+                        borderRadius: '8px 8px 0 0',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        if (activeTab !== 'kayaks') {
+                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                        }
+                    }}
+                    onMouseLeave={(e) => {
+                        if (activeTab !== 'kayaks') {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                    }}
+                >
+                    🚣 Manage Kayaks
+                </button>
             </div>
 
             {/* Statistics Tab */}
@@ -408,6 +565,52 @@ const Admin: React.FC = () => {
                             <p style={{ fontSize: '32px', fontWeight: 'bold', margin: 0, color: '#e91e63' }}>
                                 {stats.recentRentals}
                             </p>
+                        </div>
+
+                        <div style={{
+                            backgroundColor: gatewayStatus === 'online' ? '#e8f5e9' : gatewayStatus === 'offline' ? '#ffebee' : '#fff8e1',
+                            padding: '20px',
+                            borderRadius: '8px',
+                            border: `2px solid ${gatewayStatus === 'online' ? '#4CAF50' : gatewayStatus === 'offline' ? '#f44336' : '#FBC02D'}`
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 10px 0', color: gatewayStatus === 'online' ? '#388e3c' : gatewayStatus === 'offline' ? '#c62828' : '#f57f17' }}>
+                                        Gateway Status
+                                    </h3>
+                                    <p style={{ 
+                                        fontSize: '24px', 
+                                        fontWeight: 'bold', 
+                                        margin: 0,
+                                        color: gatewayStatus === 'online' ? '#4CAF50' : gatewayStatus === 'offline' ? '#f44336' : '#FBC02D'
+                                    }}>
+                                        {gatewayStatus === 'online' ? '🟢 Online' : gatewayStatus === 'offline' ? '🔴 Offline' : '🟡 Unknown'}
+                                    </p>
+                                    {gatewayMessage && (
+                                        <p style={{ fontSize: '12px', color: '#666', margin: '8px 0 0 0' }}>
+                                            {gatewayMessage}
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={checkGatewayStatus}
+                                    disabled={gatewayStatus === 'checking'}
+                                    style={{
+                                        padding: '10px 16px',
+                                        backgroundColor: gatewayStatus === 'checking' ? '#ccc' : '#667eea',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: gatewayStatus === 'checking' ? 'not-allowed' : 'pointer',
+                                        fontWeight: 'bold',
+                                        fontSize: '13px',
+                                        whiteSpace: 'nowrap',
+                                        marginLeft: '10px'
+                                    }}
+                                >
+                                    {gatewayStatus === 'checking' ? 'Testing...' : 'Test Now'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -529,7 +732,7 @@ const Admin: React.FC = () => {
                                             </td>
                                             <td style={{ padding: '12px' }}>
                                                 <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
-                                                    {activeTab === 'active' && !rental.returnPhotoUrl && (
+                                                    {activeTab === 'active' && !rental.returnPhotoUrl && rental.rentalStatus !== 'completed' && (
                                                         <button
                                                             onClick={() => handleReturnKayak(rental._id)}
                                                             disabled={returningRental === rental._id}
@@ -566,12 +769,146 @@ const Admin: React.FC = () => {
                                                     >
                                                         💳 Charge Damage
                                                     </button>
+                                                    {rental.returnPhotoUrl && (
+                                                        <button
+                                                            onClick={() => handleChargeLateFee(rental._id, rental.rentalEnd)}
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                backgroundColor: '#e91e63',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                fontSize: '14px',
+                                                                fontWeight: 'bold'
+                                                            }}
+                                                        >
+                                                            ⏰ Late Fee
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Manage Kayaks Tab */}
+            {activeTab === 'kayaks' && (
+                <div>
+                    <h2>Manage Kayaks ({kayaksList.length})</h2>
+                    {kayaksList.length === 0 ? (
+                        <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>
+                            No kayaks found
+                        </p>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+                            {kayaksList.map((kayak) => {
+                                const isEditing = editingKayakId === kayak._id;
+                                return (
+                                    <div
+                                        key={kayak._id}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            padding: '20px',
+                                            borderRadius: '12px',
+                                            border: '2px solid #e0e7ff',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                        }}
+                                    >
+                                        {isEditing ? (
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#666', marginBottom: '4px' }}>Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={editKayakForm.name}
+                                                    onChange={(e) => setEditKayakForm({ ...editKayakForm, name: e.target.value })}
+                                                    style={{ width: '100%', padding: '8px', marginBottom: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
+                                                />
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#666', marginBottom: '4px' }}>Location</label>
+                                                <input
+                                                    type="text"
+                                                    value={editKayakForm.location}
+                                                    onChange={(e) => setEditKayakForm({ ...editKayakForm, location: e.target.value })}
+                                                    style={{ width: '100%', padding: '8px', marginBottom: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
+                                                />
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#666', marginBottom: '4px' }}>Description</label>
+                                                <textarea
+                                                    value={editKayakForm.description}
+                                                    onChange={(e) => setEditKayakForm({ ...editKayakForm, description: e.target.value })}
+                                                    rows={3}
+                                                    style={{ width: '100%', padding: '8px', marginBottom: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px', resize: 'vertical' }}
+                                                />
+                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                    <button
+                                                        onClick={() => saveKayakDetails(kayak._id)}
+                                                        disabled={savingKayak || !editKayakForm.name || !editKayakForm.location}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '10px',
+                                                            backgroundColor: savingKayak ? '#ccc' : '#4CAF50',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: savingKayak ? 'not-allowed' : 'pointer',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        {savingKayak ? 'Saving...' : '✓ Save'}
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEditingKayak}
+                                                        disabled={savingKayak}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '10px',
+                                                            backgroundColor: '#666',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <h4 style={{ margin: '0 0 10px 0', color: '#667eea', fontSize: '1.2rem' }}>
+                                                    🚣 {kayak.name}
+                                                </h4>
+                                                <p style={{ margin: '0 0 8px 0', color: '#666' }}>
+                                                    📍 <strong>Location:</strong> {kayak.location}
+                                                </p>
+                                                <p style={{ margin: '0 0 15px 0', color: '#666', minHeight: '20px' }}>
+                                                    {kayak.description || <em style={{ color: '#aaa' }}>No description set</em>}
+                                                </p>
+                                                <button
+                                                    onClick={() => startEditingKayak(kayak)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '10px',
+                                                        backgroundColor: '#667eea',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                >
+                                                    ✏️ Edit Details
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -836,6 +1173,91 @@ const Admin: React.FC = () => {
                                 }}
                             >
                                 {chargingDamage ? 'Processing...' : 'Charge Customer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Late Fee Modal */}
+            {showLateFeeModal && lateFeePreview && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        padding: '30px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        minWidth: '400px',
+                        maxWidth: '500px'
+                    }}>
+                        <h3 style={{ marginTop: 0 }}>Charge Late Return Fee</h3>
+                        
+                        <div style={{ 
+                            backgroundColor: '#f5f5f5', 
+                            padding: '15px', 
+                            borderRadius: '4px',
+                            marginBottom: '20px',
+                            border: '2px solid #e91e63'
+                        }}>
+                            <div style={{ marginBottom: '10px' }}>
+                                <strong>Hours Late:</strong> {lateFeePreview.hoursLate} hours
+                            </div>
+                            <div style={{ marginBottom: '10px' }}>
+                                <strong>Fee Per Hour:</strong> ${lateFeePreview.feePerHour}/hour
+                            </div>
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#e91e63' }}>
+                                Total Charge: ${lateFeePreview.totalFee.toFixed(2)}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => {
+                                    setShowLateFeeModal(false);
+                                    setSelectedRentalIdForLateFee(null);
+                                    setLateFeePreview(null);
+                                }}
+                                disabled={chargingLateFee}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    backgroundColor: '#6c757d',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: chargingLateFee ? 'not-allowed' : 'pointer',
+                                    fontSize: '16px'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmitLateFeeCharge}
+                                disabled={chargingLateFee}
+                                style={{
+                                    flex: 2,
+                                    padding: '12px',
+                                    backgroundColor: chargingLateFee ? '#ccc' : '#e91e63',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: chargingLateFee ? 'not-allowed' : 'pointer',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                {chargingLateFee ? 'Processing...' : 'Charge Late Fee'}
                             </button>
                         </div>
                     </div>

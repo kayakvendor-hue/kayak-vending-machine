@@ -34,7 +34,7 @@ nav ul {
   display: flex;
   gap: 1rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -191,53 +191,224 @@ canvas {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
-  nav ul {
-    gap: 0.5rem;
-    padding: 0 0.5rem;
+  nav {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Admin dropdown menu - flex column */
+  nav ul[style*="gridTemplateColumns"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* Admin links in dropdown */
+  nav ul[style*="gridTemplateColumns"] li {
+    padding: 0 !important;
+  }
+
+  nav ul[style*="gridTemplateColumns"] a {
+    padding: 0.6rem 1rem !important;
+    font-size: 0.85rem !important;
+    width: 100% !important;
+    text-align: left !important;
+    display: block !important;
+  }
+
+  /* Regular user navbar - STAYS HORIZONTAL */
+  nav ul[style*="space-between"] {
+    padding: 0.75rem 1rem !important;
+    gap: 0.75rem !important;
+    flex-wrap: nowrap !important;
+  }
+
+  nav ul[style*="space-between"] li:first-child {
+    flex: 0 0 auto !important;
+  }
+
+  nav ul[style*="space-between"] li:first-child a {
+    font-size: 1.1rem !important;
+    padding: 0 !important;
+  }
+
+  nav ul[style*="space-between"] li:nth-child(2) {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+
+  nav ul[style*="space-between"] li:nth-child(2) a {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.6rem !important;
+    white-space: nowrap !important;
+  }
+
+  nav ul[style*="space-between"] li:last-child {
+    flex: 0 0 auto !important;
+  }
+
+  
+  /* Page Container */
+  .page-container {
+    max-width: 100%;
+    margin: 0;
+    padding: 1rem;
   }
   
-  nav a {
-    padding: 0.4rem 0.8rem;
+  /* Typography */
+  h1 {
+    font-size: 1.8rem;
+    margin-bottom: 0.8rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-size: 1.2rem;
+  }
+
+  h4 {
+    font-size: 1rem;
+  }
+  
+  /* Forms */
+  form {
+    gap: 1rem;
+  }
+
+  form > div {
+    gap: 0.4rem;
+  }
+  
+  label {
     font-size: 0.9rem;
   }
   
+  /* Inputs */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px;
+    padding: 1rem;
+    min-height: 48px;
+  }
+  
+  /* Buttons */
+  button, 
+  a button {
+    font-size: 1rem;
+    padding: 1rem;
+    min-height: 48px;
+    width: 100%;
+  }
+
+  /* Grid layouts */
+  .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Text scaling */
+  p {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  /* Canvas */
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+@media (max-width: 480px) {
   .page-container {
-    margin: 0.75rem;
     padding: 0.75rem;
   }
   
+  nav {
+    padding: 0.5rem 0.75rem;
+    overflow: hidden;
+  }
+
+  nav ul[style*="space-between"] {
+    padding: 0.3rem 0.5rem !important;
+    gap: 0.4rem !important;
+  }
+
+  nav ul[style*="space-between"] li:first-child a {
+    font-size: 0.9rem !important;
+  }
+
+  nav ul[style*="space-between"] li:nth-child(2) {
+    flex: 1 1 auto !important;
+    min-width: 60px !important;
+    justify-content: center !important;
+  }
+
+  nav ul[style*="space-between"] li:nth-child(2) a {
+    font-size: 0.6rem !important;
+    padding: 0.15rem 0.2rem !important;
+    white-space: nowrap !important;
+  }
+
+  .navbar-profile-circle {
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 0.9rem !important;
+    padding: 0 !important;
+  }
+
+  .navbar-login-pill {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 999px !important;
+    padding: 6px 12px !important;
+    font-size: 0.7rem !important;
+  }
+
+  
   h1 {
     font-size: 1.5rem;
+    margin-bottom: 0.6rem;
   }
   
   h2 {
     font-size: 1.3rem;
+    margin-bottom: 0.8rem;
   }
-  
+
   button, 
   a button {
-    font-size: 1.1rem;
-    padding: 1rem;
+    font-size: 0.95rem;
+    padding: 0.9rem;
+    margin-top: 0.75rem;
   }
   
   input[type="text"],
   input[type="email"],
   input[type="password"],
-  input[type="number"] {
-    font-size: 16px; /* Prevents zoom on iOS */
-    padding: 1rem;
+  input[type="number"],
+  textarea,
+  select {
+    padding: 0.9rem;
+    font-size: 15px;
   }
-}
 
-@media (max-width: 480px) {
-  nav ul {
-    flex-direction: column;
-    align-items: center;
+  form > div {
+    gap: 0.3rem;
   }
-  
-  nav a {
-    display: block;
-    width: 200px;
-    text-align: center;
+
+  p {
+    font-size: 0.9rem;
   }
 }

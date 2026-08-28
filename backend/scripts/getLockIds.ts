@@ -78,9 +78,9 @@ async function getLockIds() {
             console.log('NEXT STEPS:');
             console.log('================================================\n');
             console.log('1. Copy the Lock IDs above');
-            console.log('2. Open: backend/seedKayaks.ts');
+            console.log('2. Open: backend/scripts/seedKayaks.ts');
             console.log('3. Replace the lockId numbers (1234567, etc.) with your real Lock IDs');
-            console.log('4. Run: npx ts-node seedKayaks.ts\n');
+            console.log('4. Run: npx ts-node scripts/seedKayaks.ts\n');
         }
 
     } catch (error: any) {

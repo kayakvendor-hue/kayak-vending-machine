@@ -5,9 +5,9 @@ import API_BASE_URL from '../config/api';
 import PageHeader from '../components/PageHeader';
 
 const Signup: React.FC = () => {
-    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const history = useHistory();
 
@@ -15,9 +15,14 @@ const Signup: React.FC = () => {
         e.preventDefault();
         setError('');
 
+        // Check if passwords match
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
         try {
             const response = await axios.post(`${API_BASE_URL}/api/auth/signup`, { 
-                username,
                 email, 
                 password
             });
@@ -42,17 +47,7 @@ const Signup: React.FC = () => {
             <PageHeader icon="✨" title="Create Account" subtitle="Join us and start renting kayaks today" />
             <form onSubmit={handleSignup}>
                 <div>
-                    <label>Username:</label>
-                    <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="johndoe"
-                        required
-                    />
-                </div>
-                <div>
-                    <label>Email:</label>
+                    <label style={{ fontWeight: 'bold', color: 'white', fontSize: '16px' }}>Email:</label>
                     <input
                         type="email"
                         value={email}
@@ -62,11 +57,21 @@ const Signup: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label>Password:</label>
+                    <label style={{ fontWeight: 'bold', color: 'white', fontSize: '16px' }}>Password:</label>
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                    />
+                </div>
+                <div>
+                    <label style={{ fontWeight: 'bold', color: 'white', fontSize: '16px' }}>Confirm Password:</label>
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
                         required
                     />

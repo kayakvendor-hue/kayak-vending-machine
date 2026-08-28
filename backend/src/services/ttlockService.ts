@@ -59,8 +59,8 @@ export class TTLockService {
                 console.log(`✅ Random passcode successfully generated: ${passcode} (ID: ${passcodeId})`);
                 return { passcode, passcodeId };
             } else if (response.data.errcode !== undefined && response.data.errcode !== 0) {
-                console.error('❌ TTLock API Error:', response.data);
-                throw new Error(`TTLock error ${response.data.errcode}: ${response.data.errmsg || 'Unknown error'}`);
+                console.error('❌ API Error:', response.data);
+                throw new Error(`API error ${response.data.errcode}: Unable to generate passcode`);
             } else {
                 throw new Error('No passcode in response');
             }
@@ -84,20 +84,24 @@ export class TTLockService {
         try {
             console.log(`🗑️ Deleting keyboard passcode ID ${passcodeId} from lock ${lockId}`);
             
-            const params = {
+            const params = new URLSearchParams({
                 clientId: this.clientId,
                 accessToken: this.accessToken!,
                 lockId: lockId.toString(),
                 keyboardPwdId: passcodeId.toString(),
                 deleteType: '2', // 2 = Delete from lock
                 date: Date.now().toString()
-            };
+            });
+
+            console.log(`📤 POST ${this.apiUrl}/v3/keyboardPwd/delete`);
 
             const response = await axios.post(
                 `${this.apiUrl}/v3/keyboardPwd/delete`,
-                null,
+                params,
                 {
-                    params
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
                 }
             );
 
@@ -124,6 +128,47 @@ export class TTLockService {
         if (!this.accessToken || now >= this.tokenExpiry) {
             await this.getAccessToken();
         }
+    }
+
+    /**
+     * Execute a function with retry logic for gateway busy errors
+     * Retries up to 3 times with exponential backoff (500ms, 1000ms, 2000ms)
+     */
+    private async executeWithRetry<T>(
+        fn: () => Promise<T>,
+        maxRetries: number = 3
+    ): Promise<T> {
+        let lastError: any;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error: any) {
+                lastError = error;
+                
+                // Check if error is retryable (gateway busy -3003)
+                const isRetryable = error.retryable === true || 
+                    error.response?.data?.errcode === -3003;
+                
+                if (!isRetryable || attempt === maxRetries) {
+                    // If we got error code 1, try refreshing token on last attempt
+                    if (error.response?.data?.errcode === 1 && attempt < maxRetries) {
+                        console.log(`🔑 Error code 1 detected, refreshing token and retrying...`);
+                        this.accessToken = null; // Force token refresh
+                        this.tokenExpiry = 0;
+                        continue;
+                    }
+                    throw error;
+                }
+                
+                // Exponential backoff: 500ms, 1000ms, 2000ms
+                const delayMs = 500 * Math.pow(2, attempt - 1);
+                console.log(`⏳ Gateway busy, retrying in ${delayMs}ms (attempt ${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
+        
+        throw lastError;
     }
 
     /**
@@ -190,10 +235,98 @@ export class TTLockService {
      * @returns Whether the unlock was successful
      */
     async remoteUnlock(lockId: number): Promise<boolean> {
+        return this.executeWithRetry(async () => {
+            await this.ensureAccessToken();
+
+            try {
+                console.log(`🔓 Sending remote unlock command to lock ${lockId}`);
+                
+                if (!lockId || lockId === 0) {
+                    throw new Error('Invalid lock ID: Lock ID is missing or invalid');
+                }
+                
+                const params = new URLSearchParams({
+                    clientId: this.clientId,
+                    accessToken: this.accessToken!,
+                    lockId: lockId.toString(),
+                    date: Date.now().toString()
+                });
+
+                console.log(`📤 POST ${this.apiUrl}/v3/lock/unlock`);
+                console.log(`   lockId type: ${typeof lockId}, value: ${lockId}`);
+                console.log(`   Parameters:`, {
+                    clientId: this.clientId,
+                    accessToken: this.accessToken?.substring(0, 20) + '...',
+                    lockId: lockId.toString(),
+                    date: Date.now().toString()
+                });
+
+                const response = await axios.post(
+                    `${this.apiUrl}/v3/lock/unlock`,
+                    params,
+                    {
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        timeout: 30000
+                    }
+                );
+
+                console.log(`📥 TTLock unlock response:`, response.data);
+
+                if (response.data.errcode === 0) {
+                    console.log(`✅ Remote unlock successful for lock ${lockId}`);
+                    return true;
+                } else if (response.data.errcode === -3003) {
+                    // Gateway is busy - throw as retryable error
+                    const err: any = new Error('Gateway is busy - please try again.');
+                    err.retryable = true;
+                    throw err;
+                } else if (response.data.errcode === 1) {
+                    // Error code 1 could mean: lock already unlocked, invalid parameters, or lock doesn't support remote unlock
+                    console.warn(`⚠️  TTLock returned error code 1. This might mean:`);
+                    console.warn(`   - Lock is already in the requested state`);
+                    console.warn(`   - Lock doesn't support remote unlock via this gateway`);
+                    console.warn(`   - Parameter mismatch or invalid request format`);
+                    // Treat this as a non-retryable error
+                    throw new Error('Gateway error: Unable to unlock - the lock may already be unlocked or offline. Please try again.');
+                } else {
+                    console.error(`❌ TTLock unlock error (${response.data.errcode}):`, response.data.errmsg);
+                    throw new Error('Gateway error: Unable to complete lock operation. Please try again.');
+                }
+            } catch (error: any) {
+                const errorMsg = error.response?.data?.errmsg || error.message || 'Unknown error';
+                if (!error.retryable) {
+                    console.error('❌ Failed to remote unlock:', errorMsg);
+                    
+                    // Provide more user-friendly error messages
+                    if (error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT')) {
+                        throw new Error('Gateway unreachable - lock may be offline or out of range');
+                    }
+                    if (error.response?.data?.errcode === 10037) {
+                        throw new Error('Lock offline - gateway cannot reach the lock');
+                    }
+                    if (error.response?.data?.errcode === 10038) {
+                        throw new Error('Gateway offline or unreachable');
+                    }
+                }
+                
+                throw error;
+            }
+        });
+    }
+
+
+    /**
+     * Get the open/locked state of a lock via gateway
+     * @param lockId - The TTLock lock ID
+     * @returns Lock state: 0=locked, 1=unlocked, 2=unknown
+     */
+    async getLockState(lockId: number): Promise<number> {
         await this.ensureAccessToken();
 
         try {
-            console.log(`🔓 Sending remote unlock command to lock ${lockId}`);
+            console.log(`📊 Querying lock state for lock ${lockId}`);
             
             const params = {
                 clientId: this.clientId,
@@ -202,25 +335,146 @@ export class TTLockService {
                 date: Date.now().toString()
             };
 
-            const response = await axios.post(
-                `${this.apiUrl}/v3/lock/unlock`,
-                null,
-                {
-                    params
-                }
+            console.log(`📤 GET ${this.apiUrl}/v3/lock/queryOpenState`);
+
+            const response = await axios.get(
+                `${this.apiUrl}/v3/lock/queryOpenState`,
+                { params }
             );
 
-            console.log(`📥 TTLock unlock response:`, response.data);
+            console.log(`📥 TTLock state response:`, response.data);
 
-            if (response.data.errcode === 0) {
-                console.log(`✅ Remote unlock successful for lock ${lockId}`);
-                return true;
-            } else {
-                console.error(`❌ TTLock unlock error:`, response.data);
-                throw new Error(`TTLock error ${response.data.errcode}: ${response.data.errmsg}`);
-            }
+            const state = response.data.state;
+            const stateText = state === 0 ? 'locked' : state === 1 ? 'unlocked' : 'unknown';
+            console.log(`✅ Lock ${lockId} state: ${stateText} (${state})`);
+            return state;
         } catch (error: any) {
-            console.error('❌ Failed to remote unlock:', error.response?.data || error.message);
+            console.error('❌ Failed to query lock state:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get the battery level of a lock via gateway
+     * @param lockId - The TTLock lock ID
+     * @returns Battery percentage (0-100)
+     */
+    async getLockBattery(lockId: number): Promise<number> {
+        await this.ensureAccessToken();
+
+        try {
+            console.log(`🔋 Querying battery level for lock ${lockId}`);
+            
+            const params = {
+                clientId: this.clientId,
+                accessToken: this.accessToken!,
+                lockId: lockId.toString(),
+                date: Date.now().toString()
+            };
+
+            console.log(`📤 GET ${this.apiUrl}/v3/lock/queryElectricQuantity`);
+
+            const response = await axios.get(
+                `${this.apiUrl}/v3/lock/queryElectricQuantity`,
+                { params }
+            );
+
+            console.log(`📥 TTLock battery response:`, response.data);
+
+            const battery = response.data.electricQuantity;
+            console.log(`✅ Lock ${lockId} battery: ${battery}%`);
+            return battery;
+        } catch (error: any) {
+            console.error('❌ Failed to query lock battery:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all gateways that can communicate with a specific lock
+     * @param lockId - The TTLock lock ID
+     * @returns Array of gateway info objects
+     */
+    async getGatewaysForLock(lockId: number): Promise<any[]> {
+        await this.ensureAccessToken();
+
+        try {
+            console.log(`🌐 Querying gateways for lock ${lockId}`);
+            
+            const params = {
+                clientId: this.clientId,
+                accessToken: this.accessToken!,
+                lockId: lockId.toString(),
+                date: Date.now().toString()
+            };
+
+            console.log(`📤 GET ${this.apiUrl}/v3/gateway/listByLock`);
+
+            const response = await axios.get(
+                `${this.apiUrl}/v3/gateway/listByLock`,
+                { params }
+            );
+
+            console.log(`📥 TTLock gateway list response:`, response.data);
+
+            const gateways = response.data.list || [];
+            console.log(`✅ Found ${gateways.length} gateway(s) for lock ${lockId}`);
+            return gateways;
+        } catch (error: any) {
+            console.error('❌ Failed to query gateways for lock:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all locks that a gateway can communicate with
+     * @param gatewayId - The TTLock gateway ID
+     * @returns Array of lock info objects
+     */
+    async getLocksForGateway(gatewayId: number): Promise<any[]> {
+        await this.ensureAccessToken();
+
+        try {
+            console.log(`🔑 Querying locks for gateway ${gatewayId}`);
+            
+            const params = {
+                clientId: this.clientId,
+                accessToken: this.accessToken!,
+                gatewayId: gatewayId.toString(),
+                date: Date.now().toString()
+            };
+
+            console.log(`📤 GET ${this.apiUrl}/v3/gateway/listLock`);
+
+            const response = await axios.get(
+                `${this.apiUrl}/v3/gateway/listLock`,
+                { params }
+            );
+
+            console.log(`📥 TTLock lock list response:`, response.data);
+
+            const locks = response.data.list || [];
+            console.log(`✅ Found ${locks.length} lock(s) for gateway ${gatewayId}`);
+            
+            // Log cache age for debugging
+            if (locks.length > 0 && locks[0].updateDate) {
+                const cacheAge = Date.now() - locks[0].updateDate;
+                const minutesOld = Math.floor(cacheAge / 60000);
+                console.log(`📅 Gateway cache age: ${minutesOld} minutes old`);
+                if (minutesOld > 20) {
+                    console.log(`⚠️  Cache is getting stale (>20 min) - Gateway may need restart to refresh`);
+                }
+            } else if (locks.length === 0) {
+                console.log(`⚠️  WARNING: Gateway returned 0 locks. Possible reasons:`);
+                console.log(`   1. Gateway hasn't discovered locks yet - RESTART GATEWAY to force rediscovery`);
+                console.log(`   2. Locks and gateway in different TTLock accounts`);
+                console.log(`   3. Locks are out of Bluetooth range (> 30m from gateway)`);
+                console.log(`   4. Remote unlock not enabled in TTLock app for locks`);
+            }
+            
+            return locks;
+        } catch (error: any) {
+            console.error('❌ Failed to query locks for gateway:', error.response?.data || error.message);
             throw error;
         }
     }
@@ -230,6 +484,81 @@ export class TTLockService {
      */
     private generateRandomPasscode(): string {
         return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    /**
+     * Diagnostic: Check gateway and lock connectivity
+     * @param lockId - The TTLock lock ID
+     * @returns Diagnostic info including gateway status and connectivity
+     */
+    async diagnosticCheckLock(lockId: number): Promise<{
+        lockId: number;
+        state: string;
+        battery: number;
+        gateways: any[];
+        diagnostics: string[];
+    }> {
+        const diagnostics: string[] = [];
+        
+        try {
+            console.log(`\n🔍 DIAGNOSTIC CHECK for lock ${lockId}\n`);
+            
+            // Check lock state
+            let state = 'unknown';
+            try {
+                const stateCode = await this.getLockState(lockId);
+                state = stateCode === 0 ? 'locked' : stateCode === 1 ? 'unlocked' : 'unknown';
+                diagnostics.push(`✅ Lock state: ${state}`);
+            } catch (e: any) {
+                diagnostics.push(`❌ Cannot query lock state: ${e.message}`);
+            }
+            
+            // Check battery
+            let battery = 0;
+            try {
+                battery = await this.getLockBattery(lockId);
+                diagnostics.push(`✅ Battery level: ${battery}%`);
+                if (battery < 20) {
+                    diagnostics.push(`⚠️  LOW BATTERY - Consider replacing battery`);
+                }
+            } catch (e: any) {
+                diagnostics.push(`❌ Cannot query battery: ${e.message}`);
+            }
+            
+            // Check gateways
+            let gateways: any[] = [];
+            try {
+                gateways = await this.getGatewaysForLock(lockId);
+                if (gateways.length === 0) {
+                    diagnostics.push(`❌ NO GATEWAYS FOUND - Lock cannot be controlled remotely!`);
+                } else {
+                    diagnostics.push(`✅ Found ${gateways.length} gateway(s)`);
+                    gateways.forEach((gw, i) => {
+                        const rssi = gw.rssi || 'unknown';
+                        const quality = rssi > -75 ? 'STRONG' : rssi > -85 ? 'MEDIUM' : 'WEAK';
+                        diagnostics.push(`   Gateway ${i+1}: ${gw.gatewayName} (RSSI: ${rssi} - ${quality})`);
+                        if (rssi < -85) {
+                            diagnostics.push(`   ⚠️  WEAK SIGNAL - Lock may be far from gateway`);
+                        }
+                    });
+                }
+            } catch (e: any) {
+                diagnostics.push(`❌ Cannot query gateways: ${e.message}`);
+            }
+            
+            console.log(diagnostics.join('\n'));
+            
+            return {
+                lockId,
+                state,
+                battery,
+                gateways,
+                diagnostics
+            };
+        } catch (error: any) {
+            console.error('❌ Diagnostic check failed:', error.message);
+            throw error;
+        }
     }
 }
 

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import Rental from '../models/rental';
 import Kayak from '../models/kayak';
+import Lock from '../models/lock';
 import User from '../models/user';
 import TTLockService from '../services/ttlockService';
 import emailService from '../services/emailService';
@@ -29,23 +30,27 @@ class RentalController {
     constructor() {
         // Bind methods to preserve 'this' context
         this.getAvailableKayaks = this.getAvailableKayaks.bind(this);
+        this.prePaymentHealthCheck = this.prePaymentHealthCheck.bind(this);
         this.rentKayak = this.rentKayak.bind(this);
         this.getRentalHistory = this.getRentalHistory.bind(this);
         this.returnKayak = this.returnKayak.bind(this);
-        this.generatePasscode = this.generatePasscode.bind(this);
         this.remoteUnlock = this.remoteUnlock.bind(this);
+        this.getLockStatus = this.getLockStatus.bind(this);
+        this.getLockBattery = this.getLockBattery.bind(this);
+        this.diagnosticCheckLock = this.diagnosticCheckLock.bind(this);
     }
 
     private getTTLockService(): TTLockService {
         if (!this.ttlockService) {
             console.log('🔍 Initializing TTLockService...');
-            console.log('   TTLOCK_CLIENT_ID:', process.env.TTLOCK_CLIENT_ID);
-            console.log('   TTLOCK_CLIENT_SECRET:', process.env.TTLOCK_CLIENT_SECRET);
-            console.log('   TTLOCK_USERNAME:', process.env.TTLOCK_USERNAME);
+            console.log('   TTLOCK_CLIENT_ID:', process.env.TTLOCK_CLIENT_ID ? '***' : 'NOT SET');
+            console.log('   TTLOCK_CLIENT_SECRET:', process.env.TTLOCK_CLIENT_SECRET ? '***' : 'NOT SET');
+            console.log('   TTLOCK_USERNAME:', process.env.TTLOCK_USERNAME ? '***' : 'NOT SET');
             console.log('   TTLOCK_PASSWORD:', process.env.TTLOCK_PASSWORD ? '***' : 'NOT SET');
+            console.log('   TTLOCK_API_URL:', process.env.TTLOCK_API_URL || 'https://euapi.ttlock.com (default)');
             
             this.ttlockService = new TTLockService(
-                'https://euapi.ttlock.com',
+                process.env.TTLOCK_API_URL || 'https://euapi.ttlock.com',
                 process.env.TTLOCK_CLIENT_ID as string,
                 process.env.TTLOCK_CLIENT_SECRET as string
             );
@@ -55,10 +60,113 @@ class RentalController {
 
     public async getAvailableKayaks(req: AuthRequest, res: Response): Promise<void> {
         try {
-            const kayaks = await Kayak.find({}).sort({ createdAt: 1 });
+            // Only return kayaks that are available AND have lock signal
+            const kayaks = await Kayak.find({ isAvailable: true, lockOnline: true }).sort({ createdAt: 1 });
             res.status(200).json(kayaks);
         } catch (error) {
             res.status(500).json({ message: 'Error fetching kayaks', error });
+        }
+    }
+
+    /**
+     * Pre-payment gateway health check
+     * User calls this when they click "Continue to Payment"
+     * Verifies gateway is online and selected kayaks are rentable
+     */
+    public async prePaymentHealthCheck(req: AuthRequest, res: Response): Promise<void> {
+        const { kayakIds } = req.body;
+
+        try {
+            if (!kayakIds || !Array.isArray(kayakIds) || kayakIds.length === 0) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Kayak IDs required' 
+                });
+                return;
+            }
+
+            console.log(`\n🔍 Pre-payment health check for kayaks: ${kayakIds.join(', ')}`);
+
+            // Verify all requested kayaks exist and are available
+            const kayaks = await Kayak.find({ _id: { $in: kayakIds } });
+
+            if (kayaks.length !== kayakIds.length) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'One or more kayaks not found' 
+                });
+                return;
+            }
+
+            // Check if any kayak is already rented
+            const unavailableKayaks = kayaks.filter((k: any) => !k.isAvailable);
+            if (unavailableKayaks.length > 0) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: `${unavailableKayaks.map((k: any) => k.name).join(', ')} already rented` 
+                });
+                return;
+            }
+
+            // Now do the actual gateway health check - try 3 times
+            const ttlockService = this.getTTLockService();
+            const TEST_LOCK_ID = 18499305; // Kayak #2 (most reliable)
+            const MAX_ATTEMPTS = 3;
+            let gatewayHealthy = false;
+
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                try {
+                    console.log(`   📡 Gateway test attempt ${attempt}/${MAX_ATTEMPTS}...`);
+                    
+                    // Try to query lock state - requires gateway to respond
+                    await ttlockService.getLockState(TEST_LOCK_ID);
+                    
+                    gatewayHealthy = true;
+                    console.log(`   ✅ Gateway responded successfully on attempt ${attempt}`);
+                    break;
+                } catch (error: any) {
+                    if (attempt < MAX_ATTEMPTS) {
+                        console.log(`   ⚠️  Attempt ${attempt} failed, retrying...`);
+                    } else {
+                        console.log(`   ❌ All 3 attempts failed: ${error.message}`);
+                    }
+                }
+            }
+
+            if (!gatewayHealthy) {
+                res.status(503).json({ 
+                    success: false, 
+                    message: 'Gateway is currently offline. Unable to proceed with rental. Please try again in a few moments.',
+                    retryable: true
+                });
+                return;
+            }
+
+            // Check that all kayaks still have lock signal
+            const offlineKayaks = kayaks.filter((k: any) => !k.lockOnline);
+            if (offlineKayaks.length > 0) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: `${offlineKayaks.map((k: any) => k.name).join(', ')} lost signal. Please select different kayaks.`,
+                    retryable: false
+                });
+                return;
+            }
+
+            console.log(`🟢 Pre-payment check PASSED - gateway healthy and kayaks available\n`);
+
+            res.status(200).json({ 
+                success: true, 
+                message: 'Gateway is online and kayaks are ready. Proceed to payment.',
+                kayaksVerified: kayakIds
+            });
+        } catch (error: any) {
+            console.error('❌ Pre-payment health check error:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Error checking gateway status',
+                error: error.message 
+            });
         }
     }
 
@@ -121,14 +229,26 @@ class RentalController {
                     return;
                 }
 
+                // Check if lock is online (gateway connected)
+                if (!requestedKayak.lockOnline) {
+                    res.status(400).json({ 
+                        success: false, 
+                        message: `That kayak is unavailable - ${requestedKayak.lockStatusReason === 'gateway-offline' ? 'Gateway is offline' : 'Lock has no signal'}. Please try again shortly.`,
+                        lockStatus: requestedKayak.lockStatusReason
+                    });
+                    return;
+                }
+
                 availableKayaks = [requestedKayak];
             } else {
-                availableKayaks = await Kayak.find({ isAvailable: true }).limit(quantity);
+                // Get available kayaks that also have lock signal
+                availableKayaks = await Kayak.find({ isAvailable: true, lockOnline: true }).limit(quantity);
 
                 if (availableKayaks.length < quantity) {
                     res.status(400).json({ 
                         success: false, 
-                        message: `Only ${availableKayaks.length} kayak(s) available. Requested ${quantity}.` 
+                        message: `Only ${availableKayaks.length} kayak(s) available. Requested ${quantity}.`,
+                        hint: 'If few kayaks are available, the gateway may be offline. Please try again shortly.'
                     });
                     return;
                 }
@@ -155,37 +275,68 @@ class RentalController {
 
             // Create rental for each kayak
             for (const kayak of availableKayaks) {
-                // Generate TTLock passcode with rental-based expiration
-                let passcode: string;
-                let passcodeId: number = 0;
-                try {
-                    const result = await this.getTTLockService().generatePasscode(
-                        kayak.lockId,
-                        rentalStart.getTime(),
-                        rentalEnd.getTime()
-                    );
-                    passcode = result.passcode;
-                    passcodeId = result.passcodeId;
-                    console.log(`✅ Generated TTLock passcode for lock ${kayak.lockId}: ${passcode} (ID: ${passcodeId})`);
-                    console.log(`🔒 Passcode will expire automatically at: ${rentalEnd.toLocaleString()}`);
-                } catch (error) {
-                    console.error('TTLock error, using fallback passcode:', error);
-                    // Fallback to random passcode if TTLock fails
-                    passcode = Math.floor(100000 + Math.random() * 900000).toString();
+                // Double-check lock is still online before creating rental
+                const currentKayakStatus = await Kayak.findById(kayak._id);
+                if (!currentKayakStatus?.lockOnline) {
+                    console.warn(`⚠️ Kayak ${kayak.name} lock went offline during rental creation`);
+                    res.status(400).json({
+                        success: false,
+                        message: `${kayak.name} lock lost signal during checkout. Please select another kayak or try again.`,
+                        lockStatus: currentKayakStatus?.lockStatusReason
+                    });
+                    return;
+                }
+
+                // Get locks from the Lock collection
+                let kayakLock = null;
+                let lifevestLock = null;
+
+                // KAYAK LOCK - Query by kayak's lockDesignation
+                if (kayak.lockDesignation) {
+                    kayakLock = await Lock.findOne({ 
+                        designation: kayak.lockDesignation,
+                        status: { $in: ['available', 'in-use'] }
+                    });
+                    
+                    if (!kayakLock) {
+                        console.warn(`⚠️ No kayak lock found for designation: ${kayak.lockDesignation}`);
+                    }
+                }
+
+                // LIFEVEST/PADDLE LOCK - Get from "Lifejacket Box"
+                lifevestLock = await Lock.findOne({
+                    designation: 'Lifejacket Box',
+                    status: 'available'
+                });
+
+                if (!lifevestLock) {
+                    console.warn(`⚠️ Storage Box not available or not found`);
                 }
                 
-                // Create the rental with payment info and optional pickup photo
+                // Create the rental with lock IDs only (no passcodes)
                 const rental: any = await Rental.create({ 
                     userId, 
                     kayakId: kayak._id, 
                     rentalStart, 
                     rentalEnd, 
-                    passcode,
-                    passcodeId,
+                    kayakLockId: kayakLock?.lockId || undefined,
+                    lifevestLockId: lifevestLock?.lockId || undefined,
                     paymentIntentId,
                     paymentStatus: 'succeeded',
                     pickupPhotoUrl 
                 });
+
+                // Update lock status if locks are assigned
+                if (kayakLock) {
+                    kayakLock.status = 'in-use';
+                    kayakLock.currentRentalId = rental._id;
+                    await kayakLock.save();
+                }
+
+                // Storage Box (lifevestLock) is shared - DO NOT update its status
+                if (lifevestLock) {
+                    console.log(`✅ Storage Box lock associated (lock remains available for other rentals)`);
+                }
 
                 // Mark kayak as unavailable
                 kayak.isAvailable = false;
@@ -193,16 +344,17 @@ class RentalController {
 
                 rentals.push({
                     _id: rental._id.toString(),
-                    passcode: passcode,
                     kayakName: kayak.name,
                     kayakLocation: kayak.location,
-                    rentalEnd: rentalEnd.toISOString()
+                    rentalEnd: rentalEnd.toISOString(),
+                    kayakLockId: kayakLock?.lockId || undefined,
+                    lifevestLockId: lifevestLock?.lockId || undefined
                 });
 
                 console.log(`✅ Rental created for kayak ${kayak.name} (${kayak._id})`);
             }
 
-            // Send confirmation email/SMS for first kayak (or summary)
+            // Send confirmation email/SMS for all kayaks
 
             // Get user details for notifications (already loaded from waiver check)
             if (user && rentals.length > 0) {
@@ -220,25 +372,25 @@ class RentalController {
                     amount = calculateRentalAmount(rentalDuration) * quantity;
                 }
 
-                const firstKayak = rentals[0];
+                const kayakNames = rentals.map(r => r.kayakName).join(', ');
 
                 // Send email confirmation
                 await emailService.sendRentalConfirmation(
                     user.email,
                     user.name || user.username || 'User',
-                    quantity > 1 ? `${quantity} kayaks` : firstKayak.kayakName,
-                    firstKayak.passcode,
+                    kayakNames,
                     rentalEnd,
-                    amount
+                    amount,
+                    rentals
                 );
 
                 // Send SMS confirmation if phone number exists
                 if (user.phone) {
                     await smsService.sendRentalConfirmation(
                         user.phone,
-                        quantity > 1 ? `${quantity} kayaks` : firstKayak.kayakName,
-                        firstKayak.passcode,
-                        rentalEnd
+                        kayakNames,
+                        rentalEnd,
+                        rentals
                     );
                 }
             }
@@ -260,6 +412,24 @@ class RentalController {
         }
     }
 
+    public async getActiveRentals(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const activeRentals = await Rental.find({
+                $and: [
+                    { returnPhotoUrl: { $in: [null, '', undefined] } },
+                    { rentalStatus: { $ne: 'completed' } }
+                ]
+            })
+                .populate('userId', 'username email name phone')
+                .populate('kayakId')
+                .sort({ rentalEnd: 1 });
+            
+            res.status(200).json(activeRentals);
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error fetching active rentals', error });
+        }
+    }
+
     public async returnKayak(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId;
         const { rentalId } = req.body;
@@ -276,8 +446,12 @@ class RentalController {
                 return;
             }
 
-            // Check if kayak has already been returned
-            if (rental.returnPhotoUrl) {
+            console.log(`📝 Return request for rental ${rentalId}`);
+            console.log(`   Current rentalStatus: ${rental.rentalStatus}`);
+            console.log(`   Has returnPhotoUrl: ${!!rental.returnPhotoUrl}`);
+
+            // Check if kayak has already been returned (either by status or photo)
+            if (rental.rentalStatus === 'completed' || rental.returnPhotoUrl) {
                 res.status(400).json({ success: false, message: 'Kayak has already been returned' });
                 return;
             }
@@ -288,51 +462,96 @@ class RentalController {
                 return;
             }
 
-            // Require return photo
-            if (!file) {
-                res.status(400).json({ success: false, message: 'Return photo is required' });
-                return;
+            // Upload return photo if provided (optional for testing)
+            // Supports both: FormData file upload (multer) OR base64 JSON body
+            let photoToUpload: string | null = null;
+            
+            if (file) {
+                // MultiPart file upload (from StaffReturn.tsx)
+                const base64 = file.buffer.toString('base64');
+                photoToUpload = `data:${file.mimetype};base64,${base64}`;
+                console.log(`📁 Received return photo via FormData (${file.size} bytes)`);
+            } else if (req.body.returnPhoto) {
+                // Base64 JSON body (from Account.tsx, Admin.tsx)
+                photoToUpload = req.body.returnPhoto;
+                console.log(`📷 Received return photo via JSON body (base64)`);
+            }
+            
+            if (photoToUpload) {
+                try {
+                    console.log(`🔧 Uploading to Cloudinary with config:`, {
+                        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                        api_key: process.env.CLOUDINARY_API_KEY ? '***' : 'MISSING',
+                        api_secret: process.env.CLOUDINARY_API_SECRET ? '***' : 'MISSING'
+                    });
+                    
+                    const returnPhotoUrl = await uploadImage(photoToUpload, 'kayak-returns');
+                    console.log(`📸 Return photo uploaded: ${returnPhotoUrl}`);
+                    
+                    // Save return photo URL to rental
+                    rental.returnPhotoUrl = returnPhotoUrl;
+                    await rental.save();
+                } catch (error) {
+                    console.error('❌ Return photo upload failed:', error);
+                    console.error('Cloudinary config:', {
+                        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                        api_key_set: !!process.env.CLOUDINARY_API_KEY,
+                        api_secret_set: !!process.env.CLOUDINARY_API_SECRET
+                    });
+                    // Don't fail the return just because photo upload failed
+                }
+            } else {
+                console.log(`ℹ️ No return photo provided - skipping for testing`);
             }
 
-            // Convert buffer to base64 for uploadImage
-            const base64 = file.buffer.toString('base64');
-            const base64String = `data:${file.mimetype};base64,${base64}`;
-
-            // Upload return photo
-            let returnPhotoUrl: string;
-            try {
-                returnPhotoUrl = await uploadImage(base64String, 'kayak-returns');
-                console.log(`📸 Return photo uploaded: ${returnPhotoUrl}`);
-            } catch (error) {
-                console.error('Error uploading return photo:', error);
-                res.status(500).json({ success: false, message: 'Failed to upload return photo' });
-                return;
-            }
-
-            // Save return photo URL to rental
-            rental.returnPhotoUrl = returnPhotoUrl;
-            await rental.save();
-
-            // Check if passcode has already expired naturally
             const now = new Date();
             const kayak = rental.kayakId as any;
             
-            if (rental.rentalEnd && now > rental.rentalEnd) {
-                console.log(`✅ Passcode already expired at ${rental.rentalEnd.toLocaleString()}`);
-            } else if (rental.passcodeId && rental.passcodeId > 0) {
-                // Try to delete the passcode early (requires gateway)
-                // If no gateway is available, passcode will remain active until rentalEnd
-                try {
-                    console.log(`🗑️ Attempting to delete TTLock passcode ${rental.passcodeId} from lock ${kayak.lockId}`);
-                    const deleted = await this.getTTLockService().deletePasscode(kayak.lockId, rental.passcodeId);
-                    if (deleted) {
-                        console.log(`✅ Passcode successfully deleted from lock`);
-                    } else {
-                        console.log(`⚠️ Could not delete passcode (requires gateway). It will auto-expire at ${rental.rentalEnd?.toLocaleString()}`);
-                    }
-                } catch (error) {
-                    console.log(`⚠️ Passcode deletion failed (no gateway). It will auto-expire at ${rental.rentalEnd?.toLocaleString()}`);
-                }
+            // Get the locks used in this rental
+            let kayakLock = null;
+            let lifevestLock = null;
+
+            if (rental.kayakLockId) {
+                kayakLock = await Lock.findOne({ lockId: rental.kayakLockId });
+            }
+            if (rental.lifevestLockId) {
+                lifevestLock = await Lock.findOne({ lockId: rental.lifevestLockId });
+            }
+            
+            // Remote unlock is via gateway, no passcodes to delete
+            // Locks will maintain their state and passcodes auto-expire after rental period
+
+            // Mark rental as completed
+            console.log(`🔴 Marking rental as COMPLETED...`);
+            rental.rentalStatus = 'completed';
+            const savedRental = await rental.save();
+
+            console.log(`🔴 RENTAL MARKED AS COMPLETED`);
+            console.log(`   Rental ID: ${rental._id}`);
+            console.log(`   Status in memory: ${rental.rentalStatus}`);
+            console.log(`   Status from save: ${savedRental.rentalStatus}`);
+            
+            // Release locks back to available pool
+            if (kayakLock) {
+                kayakLock.status = 'available';
+                kayakLock.currentRentalId = undefined;
+                await kayakLock.save();
+                console.log(`✅ Kayak lock released to pool: ${kayakLock.designation}`);
+            }
+
+            // Storage Box (lifevestLock) is shared - DO NOT update its status
+            // It remains available for other active rentals
+            if (lifevestLock) {
+                console.log(`✅ Storage Box passcodes will auto-expire (lock remains available)`);
+                // DO NOT modify lifevestLock status - it's shared across all rentals
+            }
+            
+            // Verify it was saved by re-fetching from database
+            const verifyRental = await Rental.findById(rental._id);
+            console.log(`   Status verified in DB: ${verifyRental?.rentalStatus}`);
+
+            if (verifyRental?.rentalStatus !== 'completed') {
+                console.error(`❌ WARNING: Status not properly saved! Status is: ${verifyRental?.rentalStatus}`);
             }
 
             // Mark kayak as available again
@@ -409,126 +628,242 @@ class RentalController {
     /**
      * Generate a TTLock passcode for unlocking a kayak
      */
-    public async generatePasscode(req: AuthRequest, res: Response): Promise<void> {
-        const userId = req.userId;
-        const { kayakId } = req.body;
-
-        try {
-            console.log('🔐 Generating TTLock passcode for kayak:', kayakId);
-
-            // Find the kayak to get its lock ID
-            const kayak = await Kayak.findById(kayakId);
-            if (!kayak) {
-                res.status(404).json({ success: false, message: 'Kayak not found' });
-                return;
-            }
-
-            console.log(`🔑 Lock ID: ${kayak.lockId}`);
-
-            // Find active rental for this user and kayak
-            const rental = await Rental.findOne({
-                userId,
-                kayakId,
-                returnPhotoUrl: { $exists: false } // Not yet returned
-            });
-
-            if (!rental) {
-                res.status(404).json({ success: false, message: 'Active rental not found' });
-                return;
-            }
-
-            console.log(`📅 Rental period: ${rental.rentalStart} to ${rental.rentalEnd}`);
-
-            // Generate passcode using TTLock service
-            const ttlockService = this.getTTLockService();
-            const { passcode, passcodeId } = await ttlockService.generatePasscode(
-                Number(kayak.lockId),
-                rental.rentalStart ? rental.rentalStart.getTime() : Date.now(),
-                rental.rentalEnd ? rental.rentalEnd.getTime() : Date.now() + 3600000
-            );
-
-            console.log(`✅ Passcode generated: ${passcode} (ID: ${passcodeId})`);
-
-            // Save passcode to rental if not already saved
-            if (!rental.passcode) {
-                rental.passcode = passcode;
-                rental.passcodeId = passcodeId;
-                await rental.save();
-            }
-
-            res.status(200).json({
-                success: true,
-                passcode,
-                passcodeId,
-                lockId: kayak.lockId,
-                kayakName: kayak.name
-            });
-        } catch (error) {
-            console.error('Error generating passcode:', error);
-            res.status(500).json({ 
-                success: false, 
-                message: 'Failed to generate unlock passcode',
-                error: (error as any).message 
-            });
-        }
-    }
-
+    
     public async remoteUnlock(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId;
-        const { kayakId } = req.body;
+        const { rentalId, lockId } = req.body;
 
         try {
-            console.log('🔓 Remote unlock request for kayak:', kayakId);
+            console.log('🔓 Remote unlock request for rental:', rentalId);
 
-            // Find the kayak to get its lock ID
-            const kayak = await Kayak.findById(kayakId);
-            if (!kayak) {
-                res.status(404).json({ success: false, message: 'Kayak not found' });
-                return;
-            }
-
-            console.log(`🔑 Lock ID: ${kayak.lockId}`);
-
-            // Find active rental for this user and kayak
-            const rental = await Rental.findOne({
-                userId,
-                kayakId,
-                returnPhotoUrl: { $exists: false } // Not yet returned
-            });
-
+            // Find the rental
+            const rental = await Rental.findById(rentalId).populate('kayakId');
             if (!rental) {
-                res.status(404).json({ success: false, message: 'No active rental found for this kayak' });
+                console.log(`❌ Rental ${rentalId} not found`);
+                res.status(404).json({ success: false, message: 'Rental not found' });
                 return;
             }
 
-            // Check if rental is still valid
-            const now = new Date();
-            if (now > rental.rentalEnd) {
-                res.status(400).json({ success: false, message: 'Rental has expired' });
+            // Verify this rental belongs to the user
+            if (rental.userId.toString() !== userId) {
+                res.status(403).json({ success: false, message: 'Not authorized to unlock this kayak' });
                 return;
             }
 
-            console.log(`🔐 Sending remote unlock command via TTLock API...`);
+            // BLOCK UNLOCK IF KAYAK HAS BEEN RETURNED
+            // If there's a return photo, the kayak has been returned
+            if (rental.returnPhotoUrl) {
+                console.log(`🚫 UNLOCK BLOCKED - Kayak already returned (return photo exists)`);
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Cannot unlock - this kayak has already been returned.'
+                });
+                return;
+            }
+
+            console.log(`✅ Rental is still active - unlock permitted`);
+
+            const kayak = rental.kayakId as any;
+            const actualLockId = lockId || kayak?.lockId;
+
+            if (!actualLockId) {
+                console.error('❌ No lock ID found for kayak');
+                res.status(400).json({ success: false, message: 'Kayak does not have a lock ID configured' });
+                return;
+            }
+
+            console.log(`🔑 Lock ID: ${actualLockId}`);
+            console.log(`🐐 Kayak name: ${kayak?.name}`);
 
             // Call TTLock to remotely unlock the lock
             const ttlockService = this.getTTLockService();
-            const unlocked = await ttlockService.remoteUnlock(Number(kayak.lockId));
+            const unlocked = await ttlockService.remoteUnlock(Number(actualLockId));
 
             if (unlocked) {
-                console.log(`✅ Remote unlock successful!`);
+                console.log(`✅ Remote unlock successful for rental ${rentalId}!`);
                 res.status(200).json({
                     success: true,
                     message: 'Kayak unlocked successfully!',
                     kayakName: kayak.name
                 });
             } else {
-                throw new Error('Remote unlock failed');
+                throw new Error('Remote unlock failed - gateway may be unreachable');
             }
         } catch (error) {
-            console.error('Error during remote unlock:', error);
+            console.error('❌ Error during remote unlock:', error);
+            const errorMsg = (error as any).message || 'Failed to unlock kayak remotely';
             res.status(500).json({ 
                 success: false, 
-                message: 'Failed to unlock kayak remotely',
+                message: errorMsg,
+                error: errorMsg 
+            });
+        }
+    }
+
+    /**
+     * Get the current lock status (locked/unlocked) of a kayak
+     */
+    public async getLockStatus(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { rentalId } = req.query;
+
+        try {
+            console.log('📊 Querying lock status for rental:', rentalId);
+
+            if (!rentalId || typeof rentalId !== 'string') {
+                res.status(400).json({ success: false, message: 'Rental ID is required' });
+                return;
+            }
+
+            // Find the rental
+            const rental = await Rental.findById(rentalId).populate('kayakId');
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            // Verify this rental belongs to the user
+            if (rental.userId.toString() !== userId) {
+                res.status(403).json({ success: false, message: 'Not authorized to check this kayak status' });
+                return;
+            }
+
+            const kayak = rental.kayakId as any;
+            const lockIdToQuery = rental.kayakLockId; // Use the lock ID stored in the rental
+            
+            if (!lockIdToQuery) {
+                res.status(400).json({ success: false, message: 'No lock ID assigned to this kayak' });
+                return;
+            }
+
+            console.log(`🔑 Lock ID: ${lockIdToQuery}`);
+
+            // Call TTLock to query lock state
+            const ttlockService = this.getTTLockService();
+            const state = await ttlockService.getLockState(Number(lockIdToQuery));
+
+            // Update rental with latest status (kayak lock status for now)
+            rental.kayakLockStatus = state;
+            rental.kayakLockLastUpdate = new Date();
+            await rental.save();
+
+            const stateText = state === 0 ? 'locked' : state === 1 ? 'unlocked' : 'unknown';
+            console.log(`✅ Lock status retrieved: ${stateText}`);
+
+            res.status(200).json({
+                success: true,
+                lockStatus: state,
+                statusText: stateText,
+                kayakName: kayak.name,
+                lastUpdated: rental.kayakLockLastUpdate
+            });
+        } catch (error) {
+            console.error('Error querying lock status:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: (error as any).message || 'Failed to query lock status',
+                error: (error as any).message 
+            });
+        }
+    }
+
+    /**
+     * Get the battery level of a kayak's lock
+     */
+    public async getLockBattery(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { rentalId } = req.query;
+
+        try {
+            console.log('🔋 Querying battery level for rental:', rentalId);
+
+            if (!rentalId || typeof rentalId !== 'string') {
+                res.status(400).json({ success: false, message: 'Rental ID is required' });
+                return;
+            }
+
+            // Find the rental
+            const rental = await Rental.findById(rentalId).populate('kayakId');
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            // Verify this rental belongs to the user
+            if (rental.userId.toString() !== userId) {
+                res.status(403).json({ success: false, message: 'Not authorized to check this kayak battery' });
+                return;
+            }
+
+            const kayak = rental.kayakId as any;
+            console.log(`🔑 Lock ID: ${kayak.lockId}`);
+
+            // Call TTLock to query battery level
+            const ttlockService = this.getTTLockService();
+            const battery = await ttlockService.getLockBattery(Number(kayak.lockId));
+
+            console.log(`✅ Battery level retrieved: ${battery}%`);
+
+            res.status(200).json({
+                success: true,
+                battery: battery,
+                kayakName: kayak.name,
+                batteryStatus: battery > 50 ? 'good' : battery > 20 ? 'fair' : 'low'
+            });
+        } catch (error) {
+            console.error('Error querying battery level:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: (error as any).message || 'Failed to query battery level',
+                error: (error as any).message 
+            });
+        }
+    }
+
+    /**
+     * Diagnostic endpoint: Check lock and gateway status
+     */
+    public async diagnosticCheckLock(req: AuthRequest, res: Response): Promise<void> {
+        const userId = req.userId;
+        const { rentalId } = req.query;
+
+        try {
+            console.log('🔍 Diagnostic lock check requested for rental:', rentalId);
+
+            // Find the rental
+            const rental = await Rental.findById(rentalId).populate('kayakId');
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            // Verify this rental belongs to the user
+            if (rental.userId.toString() !== userId) {
+                res.status(403).json({ success: false, message: 'Not authorized to check this kayak' });
+                return;
+            }
+
+            const kayak = rental.kayakId as any;
+            const lockId = rental.kayakLockId || kayak?.lockId;
+
+            if (!lockId) {
+                res.status(400).json({ success: false, message: 'Kayak does not have a lock ID configured' });
+                return;
+            }
+
+            // Call TTLock diagnostic
+            const ttlockService = this.getTTLockService();
+            const diagnostic = await ttlockService.diagnosticCheckLock(Number(lockId));
+
+            res.status(200).json({
+                success: true,
+                diagnostic
+            });
+        } catch (error) {
+            console.error('Error during diagnostic check:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: (error as any).message || 'Failed to run diagnostic check',
                 error: (error as any).message 
             });
         }

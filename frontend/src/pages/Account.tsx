@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useHistory, useLocation } from 'react-router-dom';
 import api from '../config/axios';
-import CameraCapture from '../components/CameraCapture';
+import RemoteUnlockPanel from '../components/RemoteUnlock/RemoteUnlockPanel';
 import PageHeader from '../components/PageHeader';
 
 interface Rental {
@@ -12,27 +12,25 @@ interface Rental {
     };
     rentalStart: string;
     rentalEnd: string;
-    passcode: string;
     createdAt: string;
     returnPhotoUrl?: string;
+    rentalStatus?: 'active' | 'completed' | 'cancelled';
+    kayakLockId?: number;
+    lifevestLockId?: number;
 }
 
 const Account: React.FC = () => {
     const history = useHistory();
+    const location = useLocation();
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [waiverSigned, setWaiverSigned] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [returningRental, setReturningRental] = useState<string | null>(null);
-    const [showReturnModal, setShowReturnModal] = useState(false);
-    const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null);
-    const [returnPhoto, setReturnPhoto] = useState<string | null>(null);
-    const [showCamera, setShowCamera] = useState(false);
     const username = localStorage.getItem('username') || 'User';
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [location.pathname]);
 
     const fetchData = async () => {
         try {
@@ -60,57 +58,13 @@ const Account: React.FC = () => {
         }
     };
 
-    const handleReturnKayak = async (rentalId: string) => {
-        setSelectedRentalId(rentalId);
-        setShowReturnModal(true);
-        setReturnPhoto(null);
-    };
-
-    const handleCaptureReturnPhoto = () => {
-        setShowCamera(true);
-    };
-
-    const handlePhotoCapture = (photoData: string) => {
-        setReturnPhoto(photoData);
-        setShowCamera(false);
-    };
-
-    const handleCancelCamera = () => {
-        setShowCamera(false);
-    };
-
-    const handleConfirmReturn = async () => {
-        if (!returnPhoto) {
-            alert('Please take a photo of the kayak before returning');
-            return;
-        }
-
-        if (!selectedRentalId) return;
-
-        setReturningRental(selectedRentalId);
-        try {
-            const response = await api.post('/api/rental/return', { 
-                rentalId: selectedRentalId,
-                returnPhoto 
-            });
-            if (response.data.success) {
-                alert('Kayak returned successfully!');
-                setShowReturnModal(false);
-                setReturnPhoto(null);
-                setSelectedRentalId(null);
-                // Refresh rental history
-                fetchData();
-            }
-        } catch (err) {
-            alert('Failed to return kayak. Please try again.');
-        } finally {
-            setReturningRental(null);
-        }
+    const handleReturnKayak = (rentalId: string) => {
+        history.push(`/return?rentalId=${rentalId}`);
     };
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     };
 
     if (loading) {
@@ -123,8 +77,9 @@ const Account: React.FC = () => {
     }
 
     // Separate active and returned rentals
-    const activeRentals = rentals.filter(r => !r.returnPhotoUrl);
-    const returnedRentals = rentals.filter(r => r.returnPhotoUrl);
+    // A rental is active if: no return photo AND status is either 'active' or not set (backwards compatibility)
+    const activeRentals = rentals.filter(r => !r.returnPhotoUrl && r.rentalStatus !== 'completed');
+    const returnedRentals = rentals.filter(r => r.returnPhotoUrl || r.rentalStatus === 'completed');
 
     return (
         <div className="page-container">
@@ -160,7 +115,7 @@ const Account: React.FC = () => {
                     {waiverSigned ? '✅' : '⚠️'}
                 </div>
                 <div>
-                    <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2rem' }}>Waiver Status</h3>
+                    <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2rem', color: 'black' }}>Waiver Status</h3>
                     {waiverSigned ? (
                         <p style={{ color: '#4CAF50', fontWeight: 'bold', margin: 0 }}>
                             You're all set to rent kayaks!
@@ -183,7 +138,7 @@ const Account: React.FC = () => {
                     paddingBottom: '10px',
                     borderBottom: '3px solid #667eea'
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#333' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
                         🚣 Active Rentals
                     </h3>
                     <div style={{
@@ -230,13 +185,24 @@ const Account: React.FC = () => {
                             return (
                                 <div 
                                     key={rental._id}
+                                    onClick={() => history.push('/passcode', { rentals: [{ ...rental, kayakName, kayakLocation }] })}
                                     style={{
                                         backgroundColor: 'white',
                                         padding: '20px',
                                         borderRadius: '12px',
                                         border: isOverdue ? '3px solid #ff4444' : '2px solid #e0e7ff',
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                        position: 'relative'
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-4px)';
+                                        e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.15)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                                     }}
                                 >
                                     {isOverdue && (
@@ -285,42 +251,62 @@ const Account: React.FC = () => {
                                                 ⏰ {hoursRemaining}h {minutesRemaining}m remaining
                                             </p>
                                         )}
+                                        
+                                        {isOverdue && (
+                                            <div style={{
+                                                margin: '10px 0 0 0',
+                                                padding: '10px',
+                                                backgroundColor: '#ffe6e6',
+                                                borderRadius: '6px',
+                                                color: '#d9534f',
+                                                fontWeight: 'bold',
+                                                textAlign: 'center',
+                                                border: '2px solid #d9534f'
+                                            }}>
+                                                <p style={{margin: '0 0 5px 0'}}>⚠️ RENTAL OVERDUE</p>
+                                                <p style={{margin: 0, fontSize: '12px'}}>Late fees $10/hour charged automatically</p>
+                                            </div>
+                                        )}
                                     </div>
                                     
                                     <div style={{
-                                        backgroundColor: '#f0f4ff',
+                                        backgroundColor: '#fff3cd',
                                         padding: '12px',
                                         borderRadius: '8px',
                                         marginBottom: '15px',
-                                        border: '2px solid #667eea'
+                                        border: '2px solid #ffc107',
+                                        fontSize: '13px'
                                     }}>
-                                        <p style={{ 
-                                            margin: 0,
-                                            fontSize: '14px',
-                                            color: '#666',
-                                            marginBottom: '5px'
-                                        }}>
-                                            <strong>Access Passcode:</strong>
+                                        <p style={{margin: '0 0 8px 0', fontWeight: 'bold', color: '#856404'}}>
+                                            💰 Late Return Policy
                                         </p>
-                                        <p style={{ 
-                                            margin: 0,
-                                            fontSize: '28px',
-                                            color: '#667eea',
-                                            fontWeight: 'bold',
-                                            letterSpacing: '3px',
-                                            textAlign: 'center'
-                                        }}>
-                                            {rental.passcode}
-                                        </p>
+                                        <ul style={{margin: 0, paddingLeft: '20px', color: '#856404'}}>
+                                            <li>$10 automatically charged for each additional hour</li>
+                                            <li>You will receive email & SMS notifications</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    {/* Remote Unlock Control */}
+                                    <div style={{ marginBottom: '15px' }}>
+                                        <RemoteUnlockPanel 
+                                            rentalId={rental._id}
+                                            kayakName={kayakName}
+                                            endTime={rental.rentalEnd}
+                                            kayakLockId={rental.kayakLockId}
+                                            lifevestLockId={rental.lifevestLockId}
+                                        />
                                     </div>
                                     
                                     <div style={{ display: 'flex', gap: '10px' }}>
                                         <button
-                                            onClick={() => history.push('/passcode')}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleReturnKayak(rental._id);
+                                            }}
                                             style={{
                                                 flex: 1,
                                                 padding: '12px',
-                                                backgroundColor: '#667eea',
+                                                backgroundColor: '#4CAF50',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: '8px',
@@ -328,49 +314,20 @@ const Account: React.FC = () => {
                                                 fontSize: '1rem',
                                                 fontWeight: 'bold',
                                                 transition: 'all 0.2s',
-                                                boxShadow: '0 2px 8px rgba(102,126,234,0.3)'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#5a67d8';
-                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(102,126,234,0.4)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#667eea';
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(102,126,234,0.3)';
-                                            }}
-                                        >
-                                            📋 View Details
-                                        </button>
-                                        <button
-                                            onClick={() => handleReturnKayak(rental._id)}
-                                            disabled={returningRental === rental._id}
-                                            style={{
-                                                flex: 1,
-                                                padding: '12px',
-                                                backgroundColor: returningRental === rental._id ? '#ccc' : '#4CAF50',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                cursor: returningRental === rental._id ? 'not-allowed' : 'pointer',
-                                                fontSize: '1rem',
-                                                fontWeight: 'bold',
-                                                transition: 'all 0.2s',
                                                 boxShadow: '0 2px 8px rgba(76,175,80,0.3)'
                                             }}
                                             onMouseEnter={(e) => {
-                                                if (returningRental !== rental._id) {
-                                                    e.currentTarget.style.backgroundColor = '#45a049';
-                                                }
+                                                e.currentTarget.style.backgroundColor = '#45a049';
+                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(76,175,80,0.4)';
                                             }}
                                             onMouseLeave={(e) => {
-                                                if (returningRental !== rental._id) {
-                                                    e.currentTarget.style.backgroundColor = '#4CAF50';
-                                                }
+                                                e.currentTarget.style.backgroundColor = '#4CAF50';
+                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(76,175,80,0.3)';
                                             }}
                                         >
-                                            {returningRental === rental._id ? '⏳ Returning...' : '✓ Return Kayak'}
+                                            ✓ Return Kayak
                                         </button>
                                     </div>
                                 </div>
@@ -390,7 +347,7 @@ const Account: React.FC = () => {
                     paddingBottom: '10px',
                     borderBottom: '3px solid #6c757d'
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#333' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
                         📋 Rental History
                     </h3>
                     <div style={{
@@ -466,121 +423,6 @@ const Account: React.FC = () => {
                     </div>
                 )}  
             </div>
-
-            {/* Return Photo Modal */}
-            {showReturnModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000
-                }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        padding: '30px',
-                        borderRadius: '10px',
-                        maxWidth: '500px',
-                        width: '90%'
-                    }}>
-                        <h3 style={{ marginTop: 0 }}>Return Kayak Photo Required</h3>
-                        <p style={{ color: '#666', marginBottom: '20px' }}>
-                            Please take a photo of the kayak in its current condition. This helps us verify 
-                            the kayak was returned in good condition and protects both you and us.
-                        </p>
-                        
-                        {returnPhoto ? (
-                            <div style={{ marginBottom: '20px' }}>
-                                <p style={{ color: '#4CAF50', fontWeight: 'bold', marginBottom: '10px' }}>
-                                    ✓ Photo Captured
-                                </p>
-                                <img 
-                                    src={returnPhoto} 
-                                    alt="Return condition" 
-                                    style={{ 
-                                        maxWidth: '100%', 
-                                        borderRadius: '5px',
-                                        border: '2px solid #4CAF50'
-                                    }} 
-                                />
-                                <button 
-                                    type="button" 
-                                    onClick={() => setReturnPhoto(null)}
-                                    style={{ 
-                                        marginTop: '10px',
-                                        backgroundColor: '#6c757d',
-                                        padding: '8px 16px',
-                                        fontSize: '14px',
-                                        width: '100%'
-                                    }}
-                                >
-                                    Retake Photo
-                                </button>
-                            </div>
-                        ) : (
-                            <button 
-                                type="button"
-                                onClick={handleCaptureReturnPhoto}
-                                style={{ 
-                                    backgroundColor: '#007bff',
-                                    width: '100%',
-                                    padding: '12px',
-                                    fontSize: '16px',
-                                    marginBottom: '10px'
-                                }}
-                            >
-                                📷 Take Photo
-                            </button>
-                        )}
-                        
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                            <button 
-                                type="button"
-                                onClick={() => {
-                                    setShowReturnModal(false);
-                                    setReturnPhoto(null);
-                                    setSelectedRentalId(null);
-                                }}
-                                disabled={returningRental !== null}
-                                style={{ 
-                                    flex: 1, 
-                                    backgroundColor: '#6c757d',
-                                    opacity: returningRental !== null ? 0.5 : 1,
-                                    cursor: returningRental !== null ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                type="button"
-                                onClick={handleConfirmReturn}
-                                disabled={!returnPhoto || returningRental !== null}
-                                style={{ 
-                                    flex: 2, 
-                                    backgroundColor: returnPhoto ? '#28a745' : '#ccc',
-                                    opacity: (!returnPhoto || returningRental !== null) ? 0.5 : 1,
-                                    cursor: (!returnPhoto || returningRental !== null) ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {returningRental ? 'Returning...' : 'Confirm Return'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Camera Capture */}
-            {showCamera && (
-                <CameraCapture
-                    onCapture={handlePhotoCapture}
-                    onCancel={handleCancelCamera}
-                />
-            )}
         </div>
     );
 };

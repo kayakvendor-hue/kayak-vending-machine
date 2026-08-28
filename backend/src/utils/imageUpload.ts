@@ -24,6 +24,10 @@ export const uploadImage = async (base64Image: string, folder: string): Promise<
             imageData = `data:image/jpeg;base64,${base64Image}`;
         }
 
+        console.log(`📤 Cloudinary upload starting...`);
+        console.log(`   Folder: ${folder}`);
+        console.log(`   Image size: ${imageData.length} bytes`);
+
         const result = await cloudinary.uploader.upload(imageData, {
             folder: folder,
             resource_type: 'image',
@@ -33,10 +37,15 @@ export const uploadImage = async (base64Image: string, folder: string): Promise<
             ]
         });
 
+        console.log(`✅ Cloudinary upload successful!`);
+        console.log(`   URL: ${result.secure_url}`);
         return result.secure_url;
     } catch (error) {
-        console.error('Error uploading image to Cloudinary:', error);
-        throw new Error('Failed to upload image');
+        console.error('❌ Cloudinary upload error:');
+        console.error(`   Error message: ${(error as any).message}`);
+        console.error(`   Error code: ${(error as any).error?.http_code}`);
+        console.error(`   Full error:`, error);
+        throw new Error(`Failed to upload image: ${(error as any).message}`);
     }
 };
 

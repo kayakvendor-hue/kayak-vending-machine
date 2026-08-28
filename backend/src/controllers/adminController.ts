@@ -23,7 +23,10 @@ class AdminController {
     async getActiveRentals(req: AuthRequest, res: Response) {
         try {
             const rentals = await Rental.find({ 
-                returnPhotoUrl: { $in: [null, '', undefined] }
+                $and: [
+                    { returnPhotoUrl: { $in: [null, '', undefined] } },
+                    { rentalStatus: { $ne: 'completed' } }
+                ]
             })
                 .populate('userId', 'username email name phone')
                 .populate('kayakId')
@@ -152,6 +155,42 @@ class AdminController {
             res.status(200).json({ success: true, message: 'Kayak availability updated', kayak });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error updating kayak', error });
+        }
+    }
+
+    // Get all kayaks (for admin editing)
+    async getAllKayaks(req: AuthRequest, res: Response) {
+        try {
+            const kayaks = await Kayak.find().sort({ name: 1 });
+            res.status(200).json({ success: true, kayaks });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error fetching kayaks', error });
+        }
+    }
+
+    // Update kayak name/location/description
+    async updateKayakDetails(req: AuthRequest, res: Response) {
+        try {
+            const { kayakId, name, location, description } = req.body;
+
+            if (!kayakId) {
+                return res.status(400).json({ success: false, message: 'kayakId is required' });
+            }
+
+            const updates: { name?: string; location?: string; description?: string } = {};
+            if (name !== undefined) updates.name = name;
+            if (location !== undefined) updates.location = location;
+            if (description !== undefined) updates.description = description;
+
+            const kayak = await Kayak.findByIdAndUpdate(kayakId, updates, { new: true, runValidators: true });
+
+            if (!kayak) {
+                return res.status(404).json({ success: false, message: 'Kayak not found' });
+            }
+
+            res.status(200).json({ success: true, message: 'Kayak details updated', kayak });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error updating kayak details', error });
         }
     }
 }

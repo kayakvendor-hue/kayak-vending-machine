@@ -1,33 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
+import api from '../config/axios';
 
 const featureCards = [
     {
         icon: '⚡',
         title: 'Fast sign in',
-        body: 'Use the same account flow on web and mobile, with a clear next step every time.',
+        body: 'Sign up or log in with the same simple flow on web and mobile.',
     },
     {
         icon: '✍️',
         title: 'Waiver first',
-        body: 'Keep the liability step obvious and consistent before rentals begin.',
+        body: 'Complete the liability waiver before you start renting kayaks.',
     },
     {
         icon: '🛶',
-        title: 'Rental ready',
-        body: 'The front door is now cleanly separated from the actual rental flow.',
+        title: 'Ready to rent',
+        body: 'Access your rentals, get passcodes, and start paddling.',
     },
 ];
 
 const flowSteps = [
-    { num: '1', title: 'Create or access your account', desc: 'Use sign up or sign in to get into the app.' },
-    { num: '2', title: 'Review the waiver', desc: 'Complete the waiver before rental actions start.' },
-    { num: '3', title: 'Continue to rentals', desc: 'The app is ready for the next stage later.' },
+    { num: '1', title: 'Rent a kayak', desc: 'Book your rental and choose your desired length.' },
+    { num: '2', title: 'Unlock kayak and gear', desc: 'Press of a button - instantly unlock in the website.' },
+    { num: '3', title: 'Enjoy the water', desc: 'Put on your life jacket and paddle away!' },
+    { num: '4', title: 'Return the kayak', desc: 'Lock it back up and you\'re done!' },
 ];
 
 const Home: React.FC = () => {
     const history = useHistory();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [waiverSigned, setWaiverSigned] = useState(false);
+    const [activeRentals, setActiveRentals] = useState<any[]>([]);
 
     useEffect(() => {
         const updateAuthState = () => {
@@ -42,6 +46,50 @@ const Home: React.FC = () => {
         };
     }, []);
 
+    // Fetch waiver status when user logs in
+    useEffect(() => {
+        if (isLoggedIn) {
+            const fetchWaiverStatus = async () => {
+                try {
+                    const response = await api.get('/api/waiver/status');
+                    if (response.data.success) {
+                        setWaiverSigned(response.data.waiverSigned);
+                    }
+                } catch (err) {
+                    setWaiverSigned(false);
+                }
+            };
+            fetchWaiverStatus();
+        }
+    }, [isLoggedIn]);
+
+    // Fetch active rentals when logged in
+    useEffect(() => {
+        if (isLoggedIn) {
+            const fetchRentals = async () => {
+                try {
+                    const response = await api.get('/api/rental/history');
+                    if (response.data.success) {
+                        // Filter for active rentals
+                        const active = response.data.rentals.filter((r: any) => 
+                            !r.returnPhotoUrl && r.rentalStatus !== 'completed'
+                        );
+                        setActiveRentals(active);
+                    }
+                } catch (err) {
+                    setActiveRentals([]);
+                }
+            };
+            fetchRentals();
+        }
+    }, [isLoggedIn]);
+
+    // Conditional steps based on login state
+    const displayedFeatureCards = isLoggedIn ? [
+        featureCards[1], // Waiver first
+        featureCards[2], // Ready to rent
+    ] : featureCards;
+
     return (
         <div className="page-container">
             <section style={styles.heroCard}>
@@ -51,41 +99,53 @@ const Home: React.FC = () => {
                 </div>
 
                 <p style={styles.kicker}>Kayak Vending Machine</p>
-                <h1 style={styles.title}>A cleaner web front door that matches the mobile app.</h1>
+                <h1 style={styles.title}>
+                    {isLoggedIn ? 'Your adventure awaits' : 'Rent a kayak in minutes'}
+                </h1>
                 <p style={styles.body}>
-                    Sign in, create an account, and complete the waiver with the same visual language across both platforms.
+                    {isLoggedIn 
+                        ? 'Select your rental duration and unlock your kayak—all in seconds.'
+                        : 'Sign in, complete the waiver, and get your kayak passcode. Simple, fast, and ready to go.'
+                    }
                 </p>
 
-                <div style={styles.statsRow}>
-                    <StatChip value="3" label="front-door steps" />
-                    <StatChip value="1" label="shared design system" />
-                    <StatChip value="100%" label="mobile-friendly" />
-                </div>
-
                 <div style={styles.heroActions}>
-                    <button onClick={() => history.push('/login')}>Sign in</button>
-                    <button onClick={() => history.push('/signup')} style={styles.secondaryButton}>Create account</button>
+                    {!isLoggedIn ? (
+                        <>
+                            <button onClick={() => history.push('/login')}>Sign in</button>
+                            <button onClick={() => history.push('/signup')} style={styles.secondaryButton}>Create account</button>
+                        </>
+                    ) : (
+                        <button onClick={() => history.push(activeRentals.length > 0 ? '/account' : '/rent')}>
+                            {activeRentals.length > 0 ? 'My rentals' : 'Rent kayak'}
+                        </button>
+                    )}
                 </div>
 
                 <div style={styles.heroLinks}>
-                    <button onClick={() => history.push('/waiver')} style={styles.ghostButton}>Open waiver</button>
-                    {isLoggedIn && (
-                        <button onClick={() => history.push('/account')} style={styles.ghostButton}>My rentals</button>
+                    {isLoggedIn && !waiverSigned && (
+                        <button onClick={() => history.push('/waiver')} style={styles.ghostButton}>Open waiver</button>
                     )}
                 </div>
             </section>
 
             <section style={styles.section}>
-                <SectionHeading title="What this web app covers" subtitle="The landing experience now mirrors the mobile app: focused, card-based, and teal/navy rather than purple." />
+                <SectionHeading 
+                    title={isLoggedIn ? "Two simple steps" : "Three simple steps"} 
+                    subtitle={isLoggedIn ? "Complete your waiver and pick your kayak." : "Get your kayak passcode in just three quick steps."} 
+                />
                 <div style={styles.cardGrid}>
-                    {featureCards.map((card) => (
+                    {displayedFeatureCards.map((card) => (
                         <InfoCard key={card.title} {...card} />
                     ))}
                 </div>
             </section>
 
             <section style={styles.section}>
-                <SectionHeading title="Simple flow" subtitle="The home page should make the next step obvious, regardless of device." />
+                <SectionHeading 
+                    title="How it works" 
+                    subtitle="From booking to paddling in four simple steps." 
+                />
                 <div style={styles.stepList}>
                     {flowSteps.map((step) => (
                         <div key={step.num} style={styles.stepCard}>
@@ -150,6 +210,7 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'grid',
         gap: '16px',
         color: '#f6fbff',
+        alignItems: 'center',
     },
     heroTopRow: {
         display: 'flex',
@@ -186,24 +247,29 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 800,
     },
     title: {
-        margin: 0,
+        margin: '0 auto',
         color: '#f6fbff',
         fontSize: 'clamp(2.2rem, 5vw, 3.4rem)',
         lineHeight: 1.1,
         fontWeight: 900,
         maxWidth: '14ch',
+        textAlign: 'center' as const,
     },
     body: {
-        margin: 0,
+        margin: '0 auto',
         color: '#cae3ea',
         fontSize: '1.05rem',
         lineHeight: 1.7,
         maxWidth: '60ch',
+        textAlign: 'center' as const,
     },
     statsRow: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: '12px',
+        justifyContent: 'center',
+        marginLeft: 'auto',
+        marginRight: 'auto',
     },
     statChip: {
         background: 'rgba(255,255,255,0.07)',
@@ -224,11 +290,13 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         gap: '12px',
         flexWrap: 'wrap',
+        justifyContent: 'center',
     },
     heroLinks: {
         display: 'flex',
         gap: '12px',
         flexWrap: 'wrap',
+        justifyContent: 'center',
     },
     ghostButton: {
         background: 'transparent',
@@ -254,18 +322,20 @@ const styles: Record<string, React.CSSProperties> = {
     sectionHeading: {
         display: 'grid',
         gap: '4px',
+        textAlign: 'center' as const,
     },
     sectionTitle: {
         margin: 0,
-        textAlign: 'left',
+        textAlign: 'center',
         color: '#f6fbff',
         fontSize: '1.7rem',
         fontWeight: 900,
     },
     sectionSubtitle: {
-        margin: 0,
+        margin: '0 auto',
         color: '#bcd4db',
         lineHeight: 1.6,
+        maxWidth: '55ch',
     },
     cardGrid: {
         display: 'grid',
