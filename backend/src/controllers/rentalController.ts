@@ -374,24 +374,23 @@ class RentalController {
 
                 const kayakNames = rentals.map(r => r.kayakName).join(', ');
 
-                // Send email confirmation
-                await emailService.sendRentalConfirmation(
+                // Send notifications in the background - don't block the response on slow email/SMS providers
+                emailService.sendRentalConfirmation(
                     user.email,
                     user.name || user.username || 'User',
                     kayakNames,
                     rentalEnd,
                     amount,
                     rentals
-                );
+                ).catch(err => console.error('Error sending rental confirmation email:', err));
 
-                // Send SMS confirmation if phone number exists
                 if (user.phone) {
-                    await smsService.sendRentalConfirmation(
+                    smsService.sendRentalConfirmation(
                         user.phone,
                         kayakNames,
                         rentalEnd,
                         rentals
-                    );
+                    ).catch(err => console.error('Error sending rental confirmation SMS:', err));
                 }
             }
 
@@ -562,19 +561,18 @@ class RentalController {
             // Get user details for notifications
             const user = await User.findById(userId);
             if (user) {
-                // Send email confirmation
-                await emailService.sendReturnConfirmation(
+                // Send notifications in the background - don't block the response on slow email/SMS providers
+                emailService.sendReturnConfirmation(
                     user.email,
                     user.name || user.username || 'User',
                     kayak.name
-                );
+                ).catch(err => console.error('Error sending return confirmation email:', err));
 
-                // Send SMS confirmation if phone number exists
                 if (user.phone) {
-                    await smsService.sendReturnConfirmation(
+                    smsService.sendReturnConfirmation(
                         user.phone,
                         kayak.name
-                    );
+                    ).catch(err => console.error('Error sending return confirmation SMS:', err));
                 }
             }
 
