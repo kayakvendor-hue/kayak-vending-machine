@@ -25,7 +25,26 @@ class AuthController {
             });
             await user.save();
 
-            return res.status(201).json({ success: true, message: 'User registered successfully' });
+            const token = jwt.sign(
+                { userId: user._id, email: user.email },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '7d' }
+            );
+
+            return res.status(201).json({
+                success: true,
+                message: 'User registered successfully',
+                token,
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    name: user.name,
+                    waiverSigned: false,
+                    waiverSignedAt: null,
+                    waiverExpiresAt: null,
+                    isAdmin: user.isAdmin || false
+                }
+            });
         } catch (err: any) {
             res.status(500).json({ success: false, message: err.message || 'Signup failed' });
         }

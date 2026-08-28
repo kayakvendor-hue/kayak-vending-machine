@@ -27,7 +27,17 @@ const Signup: React.FC = () => {
                 password
             });
             if (response.data.success) {
-                history.push('/login');
+                // Auto-login: store the JWT token and user info returned from signup
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('username', response.data.user.username);
+                localStorage.setItem('user', JSON.stringify(response.data.user));
+                localStorage.setItem('isAdmin', response.data.user.isAdmin ? 'true' : 'false');
+
+                // Dispatch custom event to notify navbar of auth change
+                window.dispatchEvent(new Event('auth-change'));
+
+                // New users need to sign the waiver before renting
+                history.push('/waiver');
             } else {
                 setError(response.data.message || 'Signup failed');
             }
