@@ -83,9 +83,9 @@ const Rent: React.FC = () => {
         }
 
         // Check if enough kayaks are available
-        const availableCount = kayaks.filter(k => k.isAvailable).length;
-        if (kayakQuantity > availableCount) {
-            setError(`Only ${availableCount} kayak(s) available. Please select fewer kayaks.`);
+        const availableKayaks = kayaks.filter(k => k.isAvailable);
+        if (kayakQuantity > availableKayaks.length) {
+            setError(`Only ${availableKayaks.length} kayak(s) available. Please select fewer kayaks.`);
             return;
         }
 
@@ -96,11 +96,15 @@ const Rent: React.FC = () => {
             return;
         }
 
+        // Show payment screen immediately, health check happens in background in Payment component
+        const selectedKayakIds = availableKayaks.slice(0, kayakQuantity).map(k => k._id);
+        
         const hours = parseInt(rentalDuration);
         const pricingKey = hours.toString();
         const pricing = PRICING[pricingKey];
         const amount = pricing ? pricing.price * kayakQuantity : 0;
         setRentalAmount(amount);
+        setAssignedKayaks(selectedKayakIds);
         setShowPayment(true);
         setError('');
     };
@@ -117,12 +121,16 @@ const Rent: React.FC = () => {
             setShowWaiver(false);
             setError('');
             
-            // Continue to payment after signing
+            // Continue to payment after signing waiver (health check happens in Payment component)
+            const availableKayaks = kayaks.filter(k => k.isAvailable);
+            const selectedKayakIds = availableKayaks.slice(0, kayakQuantity).map(k => k._id);
+            
             const hours = parseInt(rentalDuration);
             const pricingKey = hours.toString();
             const pricing = PRICING[pricingKey];
             const amount = pricing ? pricing.price * kayakQuantity : 0;
             setRentalAmount(amount);
+            setAssignedKayaks(selectedKayakIds);
             setShowPayment(true);
         } catch (err) {
             setError('Failed to sign waiver. Please try again.');
@@ -374,7 +382,7 @@ const Rent: React.FC = () => {
                             marginBottom: '15px', 
                             fontWeight: 'bold',
                             fontSize: '18px',
-                            color: '#333',
+                            color: 'white',
                             textAlign: 'center'
                         }}>
                             ⏱️ Select Rental Duration
@@ -560,10 +568,15 @@ const Rent: React.FC = () => {
             ) : (
                 <Payment
                     amount={rentalAmount}
+                    kayakIds={assignedKayaks}
                     kayakId={''}
                     rentalDuration={parseInt(rentalDuration) * 3600}
                     onSuccess={handlePaymentSuccess}
                     onCancel={handlePaymentCancel}
+                    onHealthCheckFailed={(error) => {
+                        setError(error);
+                        setShowPayment(false);
+                    }}
                 />
             )}
         </div>

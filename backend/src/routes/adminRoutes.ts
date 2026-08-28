@@ -12,6 +12,8 @@ router.get('/rentals/active', authenticate, requireAdmin, adminController.getAct
 router.get('/stats', authenticate, requireAdmin, adminController.getStats);
 router.get('/users', authenticate, requireAdmin, adminController.getAllUsers);
 router.put('/kayak/availability', authenticate, requireAdmin, adminController.updateKayakAvailability);
+router.get('/kayaks', authenticate, requireAdmin, adminController.getAllKayaks);
+router.put('/kayak/details', authenticate, requireAdmin, adminController.updateKayakDetails);
 router.post('/return/kayak', authenticate, requireAdmin, rentalController.returnKayak);
 
 export default router;

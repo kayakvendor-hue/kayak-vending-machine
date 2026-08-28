@@ -23,11 +23,13 @@ export class PaymentService {
      * Create a payment intent for a rental
      * @param amount - Amount in dollars (will be converted to cents)
      * @param customerEmail - Customer email for receipt
+     * @param customerId - Stripe customer ID to tie payment to
      * @param metadata - Additional metadata (rentalId, kayakId, etc.)
      */
     public async createPaymentIntent(
         amount: number, 
         customerEmail: string,
+        customerId: string,
         metadata: { rentalId?: string; kayakId?: string; userId?: string }
     ): Promise<Stripe.PaymentIntent> {
         try {
@@ -35,14 +37,16 @@ export class PaymentService {
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: Math.round(amount * 100), // Convert dollars to cents
                 currency: 'usd',
+                customer: customerId, // Tie payment to customer
                 receipt_email: customerEmail,
                 metadata: metadata,
                 automatic_payment_methods: {
                     enabled: true,
                 },
+                setup_future_usage: 'off_session', // Save payment method for future charges
             });
             
-            console.log(`💳 Payment intent created: ${paymentIntent.id} for $${amount}`);
+            console.log(`💳 Payment intent created: ${paymentIntent.id} for $${amount} (Customer: ${customerId})`);
             return paymentIntent;
         } catch (error: any) {
             console.error('❌ Payment intent creation failed:', error.message);
@@ -288,10 +292,27 @@ export class PaymentService {
     ): Promise<Stripe.PaymentIntent> {
         try {
             const stripe = this.getStripe();
+            
+            // Get customer's saved payment methods
+            const paymentMethods = await stripe.paymentMethods.list({
+                customer: customerId,
+                type: 'card',
+                limit: 1
+            });
+
+            if (!paymentMethods.data || paymentMethods.data.length === 0) {
+                throw new Error('No saved payment method found for this customer');
+            }
+
+            const paymentMethodId = paymentMethods.data[0].id;
+            console.log(`💳 Using saved payment method: ${paymentMethodId.substring(0, 15)}...`);
+
+            // Create and confirm payment intent with the saved payment method
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: Math.round(amount * 100), // Convert to cents
                 currency: 'usd',
                 customer: customerId,
+                payment_method: paymentMethodId,
                 description,
                 metadata,
                 off_session: true, // Charge without customer present

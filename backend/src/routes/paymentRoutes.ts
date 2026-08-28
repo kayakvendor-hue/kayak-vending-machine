@@ -22,4 +22,7 @@ router.post('/save-payment-method', authenticate, paymentController.savePaymentM
 // Charge for damages (admin only)
 router.post('/charge-damage', authenticate, requireAdmin, paymentController.chargeDamage);
 
+// Charge for late return (admin only)
+router.post('/charge-late-fee', authenticate, requireAdmin, paymentController.chargeLateFee);
+
 export default router;

@@ -11,6 +11,7 @@ class PaymentController {
         this.getPaymentStatus = this.getPaymentStatus.bind(this);
         this.savePaymentMethod = this.savePaymentMethod.bind(this);
         this.chargeDamage = this.chargeDamage.bind(this);
+        this.chargeLateFee = this.chargeLateFee.bind(this);
     }
 
     /**
@@ -31,10 +32,27 @@ class PaymentController {
                 return;
             }
 
-            // Create payment intent
+            // Create or get Stripe customer
+            let customerId = user.stripeCustomerId;
+            if (!customerId) {
+                const customer = await paymentService.createCustomer(
+                    user.email,
+                    user.name || user.username || 'User',
+                    { userId: userId }
+                );
+                customerId = customer.id;
+                user.stripeCustomerId = customerId;
+                await user.save();
+                console.log(`👤 Stripe customer created: ${customerId}`);
+            } else {
+                console.log(`👤 Using existing Stripe customer: ${customerId}`);
+            }
+
+            // Create payment intent WITH customer ID
             const paymentIntent = await paymentService.createPaymentIntent(
                 amount,
                 user.email,
+                customerId,
                 {
                     userId: userId!,
                     kayakId
@@ -251,15 +269,16 @@ class PaymentController {
                 return;
             }
 
-            if (!user.stripeCustomerId || !user.defaultPaymentMethodId) {
+            if (!user.stripeCustomerId) {
                 res.status(400).json({ 
                     success: false, 
-                    message: 'User has no saved payment method' 
+                    message: 'User has not made any rentals yet (no Stripe customer record). They must complete a rental first.' 
                 });
                 return;
             }
 
-            // Charge the customer's saved payment method
+            // Charge the customer using their Stripe customer ID
+            // Stripe will use their default payment method automatically
             const paymentIntent = await paymentService.chargeCustomer(
                 user.stripeCustomerId,
                 amount,
@@ -278,6 +297,79 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to process damage charge',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Charge customer for late return fee
+     */
+    public async chargeLateFee(req: AuthRequest, res: Response): Promise<void> {
+        const { rentalId } = req.body;
+        const Rental = require('../models/rental').default;
+
+        try {
+            const rental = await Rental.findById(rentalId).populate('userId');
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            const user = rental.userId;
+            if (!user.stripeCustomerId) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'User has not made any rentals yet (no Stripe customer record)' 
+                });
+                return;
+            }
+
+            // Calculate hours late
+            const rentalEndTime = new Date(rental.rentalEnd).getTime();
+            const now = new Date().getTime();
+            const hoursLate = Math.ceil((now - rentalEndTime) / (1000 * 60 * 60));
+
+            if (hoursLate <= 0) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: 'Rental has not yet ended' 
+                });
+                return;
+            }
+
+            // Late fee: $10 per hour
+            const lateFeePerHour = 10;
+            const lateFeeAmount = hoursLate * lateFeePerHour;
+
+            console.log(`💰 Charging late fee: ${hoursLate} hours × $${lateFeePerHour}/hour = $${lateFeeAmount}`);
+
+            // Charge the customer using their Stripe customer ID
+            const paymentIntent = await paymentService.chargeCustomer(
+                user.stripeCustomerId,
+                lateFeeAmount,
+                `Late return fee - ${hoursLate} hours late at $${lateFeePerHour}/hour`,
+                { 
+                    userId: user._id.toString(),
+                    rentalId: rentalId,
+                    hoursLate,
+                    feePerHour: lateFeePerHour
+                }
+            );
+
+            res.status(200).json({
+                success: true,
+                message: 'Late return fee charged',
+                paymentIntentId: paymentIntent.id,
+                amount: lateFeeAmount,
+                hoursLate,
+                feePerHour: lateFeePerHour
+            });
+        } catch (error: any) {
+            console.error('Error charging late fee:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to process late return charge',
                 error: error.message
             });
         }

@@ -4,8 +4,22 @@ export const validateEmail = (email: string): boolean => {
 };
 
 export const validatePassword = (password: string): boolean => {
-    const minLength = 6;
-    return password.length >= minLength;
+    // Must be at least 8 characters
+    if (password.length < 8) return false;
+    
+    // Must have uppercase letter
+    if (!/[A-Z]/.test(password)) return false;
+    
+    // Must have lowercase letter
+    if (!/[a-z]/.test(password)) return false;
+    
+    // Must have at least one number
+    if (!/[0-9]/.test(password)) return false;
+    
+    // Must have at least one special symbol
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return false;
+    
+    return true;
 };
 
 export const validateWaiverSignature = (signature: string): boolean => {
@@ -21,8 +35,10 @@ export const validateSignup = (data: any) => {
     if (!data.email || !validateEmail(data.email)) {
         errors.push('Valid email is required');
     }
-    if (!data.password || !validatePassword(data.password)) {
-        errors.push('Password must be at least 6 characters');
+    if (!data.password) {
+        errors.push('Password is required');
+    } else if (!validatePassword(data.password)) {
+        errors.push('Password must be at least 8 characters with uppercase, lowercase, number, and special symbol (!@#$%^&*...)');
     }
     if (errors.length > 0) {
         return { error: { details: errors.map(msg => ({ message: msg })) } };

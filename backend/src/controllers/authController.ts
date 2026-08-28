@@ -109,23 +109,31 @@ class AuthController {
     async updateProfile(req: AuthRequest, res: Response) {
         try {
             const userId = req.userId;
-            const { name, phone, username, currentPassword, newPassword } = req.body;
+            const { name, phone, currentPassword, newPassword } = req.body;
 
             if (newPassword) {
                 if (!currentPassword) {
                     return res.status(400).json({ success: false, message: 'Current password is required to change your password' });
                 }
 
-                if (String(newPassword).length < 6) {
-                    return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+                if (String(newPassword).length < 8) {
+                    return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
                 }
-            }
 
-            // Check if username is being changed and if it's already taken
-            if (username) {
-                const existingUser = await User.findOne({ username, _id: { $ne: userId } });
-                if (existingUser) {
-                    return res.status(400).json({ success: false, message: 'Username already taken' });
+                if (!/[A-Z]/.test(String(newPassword))) {
+                    return res.status(400).json({ success: false, message: 'Password must contain uppercase letters' });
+                }
+
+                if (!/[a-z]/.test(String(newPassword))) {
+                    return res.status(400).json({ success: false, message: 'Password must contain lowercase letters' });
+                }
+
+                if (!/[0-9]/.test(String(newPassword))) {
+                    return res.status(400).json({ success: false, message: 'Password must contain at least one number' });
+                }
+
+                if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(String(newPassword))) {
+                    return res.status(400).json({ success: false, message: 'Password must contain at least one special symbol (!@#$%^&*...)' });
                 }
             }
 
@@ -144,7 +152,6 @@ class AuthController {
             const updatePayload: Record<string, unknown> = {
                 name: name || undefined,
                 phone: phone || undefined,
-                username: username || undefined,
             };
 
             if (newPassword) {

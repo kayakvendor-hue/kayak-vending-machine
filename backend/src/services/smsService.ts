@@ -32,11 +32,18 @@ class SMSService {
     async sendRentalConfirmation(
         to: string,
         kayakName: string,
-        passcode: string,
-        rentalEnd: Date
+        rentalEnd: Date,
+        rentals?: Array<{ kayakName: string }>
     ) {
         const endTime = rentalEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const message = `🛶 Kayak Rental Confirmed!\n\nKayak: ${kayakName}\nPasscode: ${passcode}\nReturn by: ${endTime}\n\nEnjoy your adventure!`;
+        
+        let message = '';
+        if (rentals && rentals.length > 1) {
+            const kayakList = rentals.map(r => r.kayakName).join(', ');
+            message = `🛶 Rental Confirmed!\n\nKayaks: ${kayakList}\nReturn by: ${endTime}\n\nUse the unlock button in your account to access your kayaks.`;
+        } else {
+            message = `🛶 Rental Confirmed!\n\nKayak: ${kayakName}\nReturn by: ${endTime}\n\nUse the unlock button in your account to access your kayak.`;
+        }
 
         try {
             await this.getClient().messages.create({
@@ -84,6 +91,26 @@ class SMSService {
             console.log(`📱 Return SMS sent to ${to}`);
         } catch (error: any) {
             console.error('❌ Failed to send return SMS:', error.message);
+        }
+    }
+
+    async sendLateReturnNotification(
+        to: string,
+        kayakName: string,
+        chargeAmount: number,
+        hoursLate: number
+    ) {
+        const message = `⏰ Late Return Fee: $${chargeAmount.toFixed(2)} charged to ${kayakName} (${hoursLate}h late). Please return immediately to avoid further charges!`;
+
+        try {
+            await this.getClient().messages.create({
+                body: message,
+                from: process.env.TWILIO_PHONE_NUMBER,
+                to: to
+            });
+            console.log(`📱 Late return notification SMS sent to ${to}`);
+        } catch (error: any) {
+            console.error('❌ Failed to send late return SMS:', error.message);
         }
     }
 }
