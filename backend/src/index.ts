@@ -20,7 +20,12 @@ const PORT = parseInt(process.env.PORT || '5000', 10);
 // req.ip / X-Forwarded-For are read correctly (required for rate limiting by IP).
 app.set('trust proxy', 1);
 
-app.use(helmet());
+// This API is intentionally called cross-origin from the Vercel frontend, so
+// disable helmet's default same-origin resource policy (it would otherwise block
+// the browser from reading responses even though CORS allows them).
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3000',
