@@ -145,6 +145,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
             const intentResponse = await api.post('/api/payment/create-intent', {
                 amount,
                 kayakId,
+                kayakIds,
                 rentalDuration
             });
 

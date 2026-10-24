@@ -24,8 +24,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
             return res.status(401).json({ success: false, message: 'Invalid token format' });
         }
 
-        // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+        // Pin the algorithm so a tampered token can't force a weaker/foreign algorithm
+        const decoded = jwt.verify(token, process.env.JWT_SECRET as string, { algorithms: ['HS256'] }) as { userId: string };
         
         // Add userId to request object so other routes can use it
         req.userId = decoded.userId;

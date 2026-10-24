@@ -6,6 +6,7 @@ import Rental from '../models/rental';
 import { validateSignup, validateLogin } from '../utils/validators';
 import { AuthRequest } from '../middleware/auth';
 import { getUserWaiverState } from '../utils/waiverStatus';
+import { safeError } from '../utils/errorResponse';
 
 class AuthController {
     async signup(req: Request, res: Response) {
@@ -19,8 +20,13 @@ class AuthController {
             }
 
             const hashedPassword = await bcrypt.hash(req.body.password, 10);
+            // Only allow specific fields from the client - never spread req.body directly,
+            // which would let a caller set isAdmin or other privileged fields.
             const user = new User({
-                ...req.body,
+                email: req.body.email,
+                username: req.body.username,
+                name: req.body.name,
+                phone: req.body.phone,
                 password: hashedPassword
             });
             await user.save();
@@ -46,7 +52,7 @@ class AuthController {
                 }
             });
         } catch (err: any) {
-            res.status(500).json({ success: false, message: err.message || 'Signup failed' });
+            res.status(500).json({ success: false, message: safeError(err, 'Signup failed') });
         }
     }
 
@@ -89,7 +95,7 @@ class AuthController {
                 }
             });
         } catch (err: any) {
-            res.status(500).json({ success: false, message: err.message || 'Login failed' });
+            res.status(500).json({ success: false, message: safeError(err, 'Login failed') });
         }
     }
 
@@ -121,7 +127,7 @@ class AuthController {
                 rentalHistory
             });
         } catch (err: any) {
-            res.status(500).json({ success: false, message: err.message || 'Failed to get profile' });
+            res.status(500).json({ success: false, message: safeError(err, 'Failed to get profile') });
         }
     }
 
@@ -205,7 +211,7 @@ class AuthController {
                 }
             });
         } catch (err: any) {
-            res.status(500).json({ success: false, message: err.message || 'Failed to update profile' });
+            res.status(500).json({ success: false, message: safeError(err, 'Failed to update profile') });
         }
     }
 }

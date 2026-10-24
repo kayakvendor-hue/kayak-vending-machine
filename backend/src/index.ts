@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
 import cron from 'node-cron';
 import routes from './routes/index';
 import dotenv from 'dotenv';
@@ -8,11 +9,18 @@ import { processLateReturnCharges } from './services/lateFeeService';
 import Lock from './models/lock';
 import TTLockService from './services/ttlockService';
 import { PasscodeQueueService } from './services/passcodeQueueService';
+import { apiLimiter } from './middleware/rateLimiter';
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
+
+// Railway (and most PaaS) sit behind a reverse proxy - trust the first hop so
+// req.ip / X-Forwarded-For are read correctly (required for rate limiting by IP).
+app.set('trust proxy', 1);
+
+app.use(helmet());
 
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -24,13 +32,18 @@ const allowedOrigins = [
     'https://kayak-vending-machine-git-main-james-paskerts-projects.vercel.app',
 ];
 
+// Only trust Vercel preview/prod deployments that belong to this project,
+// not any arbitrary *.vercel.app site (that would allow cross-site credentialed requests).
+const isTrustedVercelPreview = (origin: string) =>
+    /^https:\/\/kayak-vending-machine(-[a-z0-9-]+)?\.vercel\.app$/i.test(origin);
+
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
-        
-        // Allow all vercel.app deployments
-        if (origin.includes('.vercel.app')) {
+
+        // Allow this project's Vercel deployments (preview + prod)
+        if (isTrustedVercelPreview(origin)) {
             return callback(null, true);
         }
         
@@ -52,6 +65,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' })); // Increase limit for base64 image uploads
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// General safety-net rate limit across the whole API (specific routes have tighter limits)
+app.use('/api', apiLimiter);
 
 // Health check endpoint
 app.get('/api', (req, res) => {

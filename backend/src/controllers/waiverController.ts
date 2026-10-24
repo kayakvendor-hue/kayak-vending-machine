@@ -4,6 +4,7 @@ import User from '../models/user';
 import Waiver from '../models/waiver';
 import emailService from '../services/emailService';
 import { getUserWaiverState } from '../utils/waiverStatus';
+import { safeError } from '../utils/errorResponse';
 
 class WaiverController {
     async signWaiver(req: AuthRequest, res: Response) {
@@ -68,7 +69,7 @@ class WaiverController {
             });
         } catch (error) {
             console.error('❌ Error signing waiver:', error);
-            res.status(500).json({ success: false, message: 'Error signing waiver', error: (error as any).message });
+            res.status(500).json({ success: false, message: 'Error signing waiver', error: safeError(error) });
         }
     }
 

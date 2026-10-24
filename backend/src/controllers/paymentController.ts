@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import paymentService from '../services/paymentService';
 import User from '../models/user';
+import { calculateRentalAmount } from './rentalController';
+import { safeError } from '../utils/errorResponse';
 
 class PaymentController {
     constructor() {
@@ -19,9 +21,16 @@ class PaymentController {
      */
     public async createPaymentIntent(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId;
-        const { amount, kayakId, rentalDuration } = req.body;
+        const { kayakId, kayakIds, kayakQuantity, rentalDuration } = req.body;
 
-        console.log('🔵 POST /payment/create-intent received:', { userId, amount, kayakId, rentalDuration });
+        // Never trust a client-supplied dollar amount for the actual charge - recompute
+        // it server-side from duration/quantity so a tampered request can't underpay.
+        const quantity = Array.isArray(kayakIds) && kayakIds.length > 0
+            ? kayakIds.length
+            : (Number(kayakQuantity) || 1);
+        const amount = calculateRentalAmount(Number(rentalDuration)) * quantity;
+
+        console.log('🔵 POST /payment/create-intent received:', { userId, amount, kayakId, kayakQuantity: quantity, rentalDuration });
 
         try {
             // Get user email for receipt
@@ -75,7 +84,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to create payment intent',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -122,7 +131,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to create payment link',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -177,15 +186,21 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to confirm payment',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
     public async getPaymentStatus(req: AuthRequest, res: Response): Promise<void> {
         const { paymentIntentId } = req.params;
+        const userId = req.userId;
 
         try {
             const paymentIntent = await paymentService.getPaymentIntent(paymentIntentId);
+
+            if (paymentIntent.metadata?.userId !== userId) {
+                res.status(403).json({ success: false, message: 'Not authorized to view this payment' });
+                return;
+            }
             
             res.status(200).json({
                 success: true,
@@ -198,7 +213,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to retrieve payment status',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -251,7 +266,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to save payment method',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -297,7 +312,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to process damage charge',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -370,7 +385,7 @@ class PaymentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to process late return charge',
-                error: error.message
+                error: safeError(error)
             });
         }
     }

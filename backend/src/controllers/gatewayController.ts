@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { TTLockService } from '../services/ttlockService';
 import Kayak from '../models/kayak';
+import { safeError } from '../utils/errorResponse';
 
 class GatewayController {
     private ttlockService: TTLockService | null = null;
@@ -85,7 +86,7 @@ class GatewayController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to fetch gateway status',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -165,7 +166,7 @@ class GatewayController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to fetch gateway details',
-                error: error.message
+                error: safeError(error)
             });
         }
     }
@@ -200,7 +201,7 @@ class GatewayController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to fetch kayak status',
-                error: error.message
+                error: safeError(error)
             });
         }
     }

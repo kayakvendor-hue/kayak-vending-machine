@@ -10,6 +10,7 @@ import smsService from '../services/smsService';
 import paymentService from '../services/paymentService';
 import { uploadImage } from '../utils/imageUpload';
 import { getUserWaiverState } from '../utils/waiverStatus';
+import { safeError } from '../utils/errorResponse';
 
 // Tiered pricing structure with discounts
 const PRICING_TIERS = {
@@ -19,7 +20,7 @@ const PRICING_TIERS = {
     8: 50    // 8 hours: $50 (38% discount)
 };
 
-function calculateRentalAmount(durationInSeconds: number): number {
+export function calculateRentalAmount(durationInSeconds: number): number {
     const hours = Math.round(durationInSeconds / 3600);
     return PRICING_TIERS[hours as keyof typeof PRICING_TIERS] || hours * 10; // Fallback to $10/hour
 }
@@ -165,7 +166,7 @@ class RentalController {
             res.status(500).json({ 
                 success: false, 
                 message: 'Error checking gateway status',
-                error: error.message 
+                error: safeError(error) 
             });
         }
     }
@@ -689,7 +690,7 @@ class RentalController {
             }
         } catch (error) {
             console.error('❌ Error during remote unlock:', error);
-            const errorMsg = (error as any).message || 'Failed to unlock kayak remotely';
+            const errorMsg = safeError(error, 'Failed to unlock kayak remotely');
             res.status(500).json({ 
                 success: false, 
                 message: errorMsg,
@@ -759,8 +760,8 @@ class RentalController {
             console.error('Error querying lock status:', error);
             res.status(500).json({ 
                 success: false, 
-                message: (error as any).message || 'Failed to query lock status',
-                error: (error as any).message 
+                message: safeError(error, 'Failed to query lock status'),
+                error: safeError(error) 
             });
         }
     }
@@ -812,8 +813,8 @@ class RentalController {
             console.error('Error querying battery level:', error);
             res.status(500).json({ 
                 success: false, 
-                message: (error as any).message || 'Failed to query battery level',
-                error: (error as any).message 
+                message: safeError(error, 'Failed to query battery level'),
+                error: safeError(error) 
             });
         }
     }
@@ -861,8 +862,8 @@ class RentalController {
             console.error('Error during diagnostic check:', error);
             res.status(500).json({ 
                 success: false, 
-                message: (error as any).message || 'Failed to run diagnostic check',
-                error: (error as any).message 
+                message: safeError(error, 'Failed to run diagnostic check'),
+                error: safeError(error) 
             });
         }
     }

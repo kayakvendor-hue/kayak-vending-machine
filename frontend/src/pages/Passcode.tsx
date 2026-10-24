@@ -32,6 +32,7 @@ const Passcode: React.FC = () => {
     const [showCamera, setShowCamera] = useState(false);
     const [pickupPhoto, setPickupPhoto] = useState<string | null>(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [photoSubmitted, setPhotoSubmitted] = useState(false);
     const [loadedRentals, setLoadedRentals] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [unlockedKayaks, setUnlockedKayaks] = useState<Set<string>>(new Set());
@@ -117,23 +118,27 @@ const Passcode: React.FC = () => {
         setShowCamera(true);
     };
 
-    const handlePhotoCapture = async (photoData: string) => {
+    const handlePhotoCapture = (photoData: string) => {
+        // Just store the photo for review; uploading happens when the user submits it
         setPickupPhoto(photoData);
+        setPhotoSubmitted(false);
         setShowCamera(false);
-        
-        // Upload the photo to the first rental
-        if (kayakRentals.length > 0) {
-            try {
-                setUploadingPhoto(true);
-                await api.post('/api/rental/update-pickup-photo', {
-                    rentalId: kayakRentals[0]._id,
-                    pickupPhoto: photoData
-                });
-                setUploadingPhoto(false);
-            } catch (err) {
-                setUploadingPhoto(false);
-                alert('Failed to upload photo. Please try again.');
-            }
+    };
+
+    const handleSubmitPhoto = async () => {
+        if (!pickupPhoto || kayakRentals.length === 0) return;
+
+        try {
+            setUploadingPhoto(true);
+            await api.post('/api/rental/update-pickup-photo', {
+                rentalId: kayakRentals[0]._id,
+                pickupPhoto
+            });
+            setUploadingPhoto(false);
+            setPhotoSubmitted(true);
+        } catch (err) {
+            setUploadingPhoto(false);
+            alert('Failed to upload photo. Please try again.');
         }
     };
 
@@ -579,27 +584,71 @@ const Passcode: React.FC = () => {
                             textAlign: 'center'
                         }}>
                             <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#667eea' }}>
-                                ✓ Damage Photo Captured
+                                {photoSubmitted ? '✓ Damage Photo Submitted' : 'Review Your Photo'}
                             </p>
                             <img src={pickupPhoto} alt="Damage report" style={{ maxWidth: '300px', width: '100%', borderRadius: '8px', marginBottom: '10px' }} />
-                            <button 
-                                type="button" 
-                                onClick={() => {
-                                    setPickupPhoto(null);
-                                    setShowCamera(true);
-                                }}
-                                style={{ 
-                                    backgroundColor: '#667eea',
-                                    color: 'white',
-                                    padding: '8px 16px',
-                                    fontSize: '14px',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Retake Photo
-                            </button>
+                            {photoSubmitted ? (
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setPickupPhoto(null);
+                                        setPhotoSubmitted(false);
+                                        setShowCamera(true);
+                                    }}
+                                    style={{ 
+                                        backgroundColor: '#667eea',
+                                        color: 'white',
+                                        padding: '8px 16px',
+                                        fontSize: '14px',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Retake Photo
+                                </button>
+                            ) : (
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            setPickupPhoto(null);
+                                            setShowCamera(true);
+                                        }}
+                                        disabled={uploadingPhoto}
+                                        style={{ 
+                                            backgroundColor: '#6c757d',
+                                            color: 'white',
+                                            padding: '8px 16px',
+                                            fontSize: '14px',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                                            opacity: uploadingPhoto ? 0.6 : 1
+                                        }}
+                                    >
+                                        Retake Photo
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSubmitPhoto}
+                                        disabled={uploadingPhoto}
+                                        style={{ 
+                                            backgroundColor: '#28a745',
+                                            color: 'white',
+                                            padding: '8px 16px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                                            opacity: uploadingPhoto ? 0.6 : 1
+                                        }}
+                                    >
+                                        {uploadingPhoto ? '⏳ Submitting...' : '✓ Submit Photo'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 

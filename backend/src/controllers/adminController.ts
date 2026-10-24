@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import Rental from '../models/rental';
 import User from '../models/user';
 import Kayak from '../models/kayak';
+import { safeError } from '../utils/errorResponse';
 
 class AdminController {
     // Get all rentals with user and kayak details
@@ -15,7 +16,7 @@ class AdminController {
             
             res.status(200).json({ success: true, rentals });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error fetching rentals', error });
+            res.status(500).json({ success: false, message: 'Error fetching rentals', error: safeError(error) });
         }
     }
 
@@ -34,7 +35,7 @@ class AdminController {
             
             res.status(200).json({ success: true, rentals });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error fetching active rentals', error });
+            res.status(500).json({ success: false, message: 'Error fetching active rentals', error: safeError(error) });
         }
     }
 
@@ -120,7 +121,7 @@ class AdminController {
             });
         } catch (error) {
             console.error('Error fetching stats:', error);
-            res.status(500).json({ success: false, message: 'Error fetching statistics', error });
+            res.status(500).json({ success: false, message: 'Error fetching statistics', error: safeError(error) });
         }
     }
 
@@ -133,7 +134,7 @@ class AdminController {
             
             res.status(200).json({ success: true, users });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error fetching users', error });
+            res.status(500).json({ success: false, message: 'Error fetching users', error: safeError(error) });
         }
     }
 
@@ -154,7 +155,7 @@ class AdminController {
 
             res.status(200).json({ success: true, message: 'Kayak availability updated', kayak });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error updating kayak', error });
+            res.status(500).json({ success: false, message: 'Error updating kayak', error: safeError(error) });
         }
     }
 
@@ -164,7 +165,7 @@ class AdminController {
             const kayaks = await Kayak.find().sort({ name: 1 });
             res.status(200).json({ success: true, kayaks });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error fetching kayaks', error });
+            res.status(500).json({ success: false, message: 'Error fetching kayaks', error: safeError(error) });
         }
     }
 
@@ -190,7 +191,7 @@ class AdminController {
 
             res.status(200).json({ success: true, message: 'Kayak details updated', kayak });
         } catch (error) {
-            res.status(500).json({ success: false, message: 'Error updating kayak details', error });
+            res.status(500).json({ success: false, message: 'Error updating kayak details', error: safeError(error) });
         }
     }
 }
