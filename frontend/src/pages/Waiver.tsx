@@ -21,7 +21,7 @@ const Waiver: React.FC = () => {
         }
 
         try {
-            const response = await api.post('/api/waiver/sign', {});
+            const response = await api.post('/api/waiver/sign', {}, { timeout: 15000 });
             
             if (response.data.success) {
                 console.log('✅ Waiver signed successfully');

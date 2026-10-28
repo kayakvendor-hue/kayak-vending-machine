@@ -49,17 +49,14 @@ class WaiverController {
 
             const waiverState = await getUserWaiverState(String(userId));
 
-            // Send waiver confirmation email
-            try {
-                await emailService.sendWaiverConfirmation(
-                    user.email,
-                    user.name || (user as any).username || 'User'
-                );
-                console.log('✅ Confirmation email sent');
-            } catch (emailError) {
-                console.warn('⚠️ Email sending failed (non-fatal):', emailError);
-            }
-            
+            // Fire-and-forget: a slow or hung SMTP server must not delay the response
+            emailService.sendWaiverConfirmation(
+                user.email,
+                user.name || (user as any).username || 'User'
+            )
+                .then(() => console.log('✅ Confirmation email sent'))
+                .catch((emailError) => console.warn('⚠️ Email sending failed (non-fatal):', emailError));
+
             res.status(200).json({ 
                 success: true, 
                 message: 'Waiver signed successfully',
