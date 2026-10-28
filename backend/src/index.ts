@@ -35,6 +35,8 @@ const allowedOrigins = [
     'http://localhost:8083',
     'https://kayak-vending-machine-cgsj.vercel.app',
     'https://kayak-vending-machine-git-main-james-paskerts-projects.vercel.app',
+    'https://www.kayakvendor.com',
+    'https://kayakvendor.com',
 ];
 
 // Only trust Vercel preview/prod deployments that belong to this project,
@@ -80,6 +82,22 @@ app.get('/api', (req, res) => {
 });
 
 app.use('/api', routes);
+
+// Centralized error handler. Without this, errors thrown earlier in the chain
+// (e.g. the CORS origin check rejecting an unrecognized Origin) fall through to
+// Express's default handler, which responds with a raw 500 + stack trace instead
+// of a clean, correctly-coded response - this broke preflight OPTIONS requests
+// for disallowed origins with an opaque 500 instead of a proper 403.
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err.message === 'Not allowed by CORS') {
+        console.warn(`CORS rejected origin "${req.headers.origin}" for ${req.method} ${req.path}`);
+        res.status(403).json({ message: 'Not allowed by CORS' });
+        return;
+    }
+
+    console.error('Unhandled error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+});
 
 async function startServer() {
     try {
