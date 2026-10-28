@@ -68,7 +68,7 @@
 
 .battery-fill {
     height: 24px;
-    background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+    background: #4CAF50;
     border-radius: 4px;
     min-width: 20%;
     display: flex;
@@ -99,7 +99,7 @@
 }
 
 .lock-item {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     color: white;
     padding: 20px;
     border-radius: 8px;

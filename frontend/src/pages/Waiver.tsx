@@ -44,6 +44,7 @@ const Waiver: React.FC = () => {
             
             <div style={{
                 backgroundColor: '#fff',
+                color: '#000',
                 padding: '20px',
                 borderRadius: '8px',
                 marginBottom: '20px',

@@ -20,7 +20,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ items, title }) => {
                     textAlign: 'center', 
                     marginBottom: '30px', 
                     color: '#333',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: '#667eea',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text'

@@ -1,5 +1,5 @@
 .remote-unlock-panel {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #667eea;
   border-radius: 12px;
   padding: 16px;
   color: white;
@@ -124,7 +124,7 @@
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
   .remote-unlock-panel {
-    background: linear-gradient(135deg, #5a67d8 0%, #6a4c93 100%);
+    background: #5a67d8;
   }
 
   .status-display {
