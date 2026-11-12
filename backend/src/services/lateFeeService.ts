@@ -84,7 +84,7 @@ export async function processLateReturnCharges() {
                 try {
                     await emailService.sendLateReturnNotification(
                         user.email,
-                        user.name || user.username || 'User',
+                        user.name || 'User',
                         kayak.name,
                         chargeAmount,
                         hoursLate,

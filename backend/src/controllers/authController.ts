@@ -24,8 +24,7 @@ class AuthController {
             // which would let a caller set isAdmin or other privileged fields.
             const user = new User({
                 email: req.body.email,
-                username: req.body.username,
-                name: req.body.name,
+                name: req.body.name.trim(),
                 phone: req.body.phone,
                 password: hashedPassword
             });
@@ -157,7 +156,6 @@ class AuthController {
                 success: true,
                 user: {
                     id: user._id,
-                    username: user.username,
                     email: user.email,
                     name: user.name,
                     phone: user.phone,
@@ -242,7 +240,6 @@ class AuthController {
                 message: 'Profile updated successfully',
                 user: {
                     id: user._id,
-                    username: user.username,
                     email: user.email,
                     name: user.name,
                     phone: user.phone,

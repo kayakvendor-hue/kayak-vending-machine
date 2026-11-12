@@ -1,5 +1,32 @@
 import { Schema, model } from 'mongoose';
 
+// A companion rider on a multi-kayak rental, beyond the account holder.
+// Children only provide a name (a parent/guardian signs for them via
+// guardianSignatureForMinors below); adults must sign and give their own DOB.
+const riderSchema = new Schema({
+    riderType: {
+        type: String,
+        enum: ['child', 'adult'],
+        required: true
+    },
+    name: {
+        type: String,
+        required: false
+    },
+    dateOfBirth: {
+        type: Date,
+        required: false
+    },
+    signature: {
+        type: String,
+        required: false
+    },
+    dateSigned: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
+
 const rentalSchema = new Schema({
     userId: {
         type: Schema.Types.ObjectId,
@@ -95,6 +122,21 @@ const rentalSchema = new Schema({
         type: Number,
         default: 0,
         description: 'Total number of hourly late charges applied to this rental'
+    },
+    waiverConfirmedAt: {
+        type: Date,
+        required: false,
+        description: 'When the renter re-confirmed the liability waiver for this specific rental'
+    },
+    additionalRiders: {
+        type: [riderSchema],
+        default: undefined,
+        description: 'Other people (children and/or adults) on a multi-kayak rental, beyond the account holder'
+    },
+    guardianSignatureForMinors: {
+        type: String,
+        required: false,
+        description: "Parent/guardian signature authorizing the child riders listed in additionalRiders"
     },
     createdAt: {
         type: Date,

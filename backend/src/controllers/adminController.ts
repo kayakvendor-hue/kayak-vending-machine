@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import Rental from '../models/rental';
 import User from '../models/user';
 import Kayak from '../models/kayak';
+import Waiver from '../models/waiver';
 import { safeError } from '../utils/errorResponse';
 
 class AdminController {
@@ -10,7 +11,7 @@ class AdminController {
     async getAllRentals(req: AuthRequest, res: Response) {
         try {
             const rentals = await Rental.find()
-                .populate('userId', 'username email name phone')
+                .populate('userId', 'email name phone')
                 .populate('kayakId')
                 .sort({ createdAt: -1 });
             
@@ -29,7 +30,7 @@ class AdminController {
                     { rentalStatus: { $ne: 'completed' } }
                 ]
             })
-                .populate('userId', 'username email name phone')
+            .populate('userId', 'email name phone')
                 .populate('kayakId')
                 .sort({ rentalEnd: 1 });
             
@@ -131,10 +132,50 @@ class AdminController {
             const users = await User.find()
                 .select('-password')
                 .sort({ createdAt: -1 });
+
+            // Each user has at most one master waiver record (signature + DOB),
+            // so this is a simple 1:1 lookup keyed by userId.
+            const waivers = await Waiver.find({ userId: { $in: users.map(u => u._id) } })
+                .select('userId dateSigned dateOfBirth');
+            const waiverByUserId = new Map(waivers.map(w => [String(w.userId), w]));
+
+            const usersWithWaiverInfo = users.map(user => {
+                const waiver = waiverByUserId.get(String(user._id));
+                return {
+                    ...user.toObject(),
+                    waiverSigned: Boolean(waiver),
+                    waiverSignedAt: waiver?.dateSigned || null,
+                    hasSignatureOnFile: Boolean(waiver),
+                };
+            });
             
-            res.status(200).json({ success: true, users });
+            res.status(200).json({ success: true, users: usersWithWaiverInfo });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error fetching users', error: safeError(error) });
+        }
+    }
+
+    // Get a single user's waiver record (signature image + date of birth + date signed)
+    async getUserWaiver(req: AuthRequest, res: Response) {
+        try {
+            const { userId } = req.params;
+
+            const waiver = await Waiver.findOne({ userId }).sort({ dateSigned: -1 });
+
+            if (!waiver) {
+                return res.status(404).json({ success: false, message: 'No waiver on file for this user' });
+            }
+
+            res.status(200).json({
+                success: true,
+                waiver: {
+                    signature: waiver.signature,
+                    dateOfBirth: waiver.dateOfBirth,
+                    dateSigned: waiver.dateSigned,
+                }
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error fetching waiver', error: safeError(error) });
         }
     }
 

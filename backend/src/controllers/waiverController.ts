@@ -5,18 +5,37 @@ import Waiver from '../models/waiver';
 import emailService from '../services/emailService';
 import { getUserWaiverState } from '../utils/waiverStatus';
 import { safeError } from '../utils/errorResponse';
+import { validateWaiverSignature, validateDateOfBirth, isAtLeastMinimumRentalAge, MINIMUM_RENTAL_AGE } from '../utils/validators';
 
 class WaiverController {
+    // Captures the one-time master waiver: drawn signature + date of birth.
+    // Subsequent rentals only require a checkbox re-confirmation (see
+    // rentalController.rentKayak), so this should only be called once per user.
     async signWaiver(req: AuthRequest, res: Response) {
         try {
             const userId = req.userId; // From auth middleware
-            const { signature } = req.body;
+            const { signature, dateOfBirth } = req.body;
 
             console.log('📝 Waiver sign request from user:', userId);
 
             if (!userId) {
                 console.log('❌ User not authenticated');
                 return res.status(401).json({ success: false, message: 'Not authenticated' });
+            }
+
+            if (!signature || !validateWaiverSignature(signature)) {
+                return res.status(400).json({ success: false, message: 'A signature is required to sign the waiver' });
+            }
+
+            if (!dateOfBirth || !validateDateOfBirth(dateOfBirth)) {
+                return res.status(400).json({ success: false, message: 'A valid date of birth is required to sign the waiver' });
+            }
+
+            if (!isAtLeastMinimumRentalAge(dateOfBirth)) {
+                return res.status(403).json({
+                    success: false,
+                    message: `You must be at least ${MINIMUM_RENTAL_AGE} years old to sign the waiver and rent a kayak.`
+                });
             }
             
             console.log('🔄 Updating user record...');
@@ -39,7 +58,8 @@ class WaiverController {
                 { userId },
                 {
                     userId,
-                    signature: signature || 'agreed_via_checkbox', // Use 'agreed_via_checkbox' if no signature provided
+                    signature,
+                    dateOfBirth: new Date(dateOfBirth),
                     dateSigned: new Date(),
                 },
                 { upsert: true, new: true, runValidators: true }
@@ -52,7 +72,7 @@ class WaiverController {
             // Fire-and-forget: a slow or hung SMTP server must not delay the response
             emailService.sendWaiverConfirmation(
                 user.email,
-                user.name || (user as any).username || 'User'
+                user.name || 'User'
             )
                 .then(() => console.log('✅ Confirmation email sent'))
                 .catch((emailError) => console.warn('⚠️ Email sending failed (non-fatal):', emailError));

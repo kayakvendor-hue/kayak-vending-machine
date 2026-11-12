@@ -46,7 +46,7 @@ class PaymentController {
             if (!customerId) {
                 const customer = await paymentService.createCustomer(
                     user.email,
-                    user.name || user.username || 'User',
+                    user.name || 'User',
                     { userId: userId }
                 );
                 customerId = customer.id;
@@ -237,7 +237,7 @@ class PaymentController {
             if (!customerId) {
                 const customer = await paymentService.createCustomer(
                     user.email,
-                    user.name || user.username || 'User',
+                    user.name || 'User',
                     { userId: userId }
                 );
                 customerId = customer.id;

@@ -26,6 +26,30 @@ export const validateWaiverSignature = (signature: string): boolean => {
     return signature.trim().length > 0;
 };
 
+export const validateDateOfBirth = (dateOfBirth: string | Date): boolean => {
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) return false;
+    // Must be a real date in the past (not today/future)
+    return dob.getTime() < Date.now();
+};
+
+export const MINIMUM_RENTAL_AGE = 18;
+
+export const calculateAge = (dateOfBirth: string | Date): number => {
+    const dob = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const hasHadBirthdayThisYear =
+        today.getMonth() > dob.getMonth() ||
+        (today.getMonth() === dob.getMonth() && today.getDate() >= dob.getDate());
+    if (!hasHadBirthdayThisYear) age--;
+    return age;
+};
+
+export const isAtLeastMinimumRentalAge = (dateOfBirth: string | Date): boolean => {
+    return calculateAge(dateOfBirth) >= MINIMUM_RENTAL_AGE;
+};
+
 export const validateRentalDates = (startDate: Date, endDate: Date): boolean => {
     return startDate < endDate;
 };
@@ -39,6 +63,9 @@ export const validateSignup = (data: any) => {
         errors.push('Password is required');
     } else if (!validatePassword(data.password)) {
         errors.push('Password must be at least 8 characters with uppercase, lowercase, number, and special symbol (!@#$%^&*...)');
+    }
+    if (typeof data.name !== 'string' || data.name.trim().length < 2) {
+        errors.push('Full name is required');
     }
     if (errors.length > 0) {
         return { error: { details: errors.map(msg => ({ message: msg })) } };

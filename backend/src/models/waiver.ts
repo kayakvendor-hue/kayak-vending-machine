@@ -10,6 +10,10 @@ const waiverSchema = new Schema({
         type: String,
         required: true
     },
+    dateOfBirth: {
+        type: Date,
+        required: true
+    },
     dateSigned: {
         type: Date,
         default: Date.now

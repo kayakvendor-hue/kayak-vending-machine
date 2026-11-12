@@ -43,7 +43,7 @@ class PasswordResetController {
             try {
                 await emailService.sendPasswordResetEmail(
                     user.email,
-                    user.name || user.username || 'User',
+                    user.name || 'User',
                     resetUrl
                 );
                 
