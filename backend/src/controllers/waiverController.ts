@@ -6,7 +6,7 @@ import emailService from '../services/emailService';
 import { getUserWaiverState } from '../utils/waiverStatus';
 import { safeError } from '../utils/errorResponse';
 import { validateWaiverSignature, validateDateOfBirth, isAtLeastMinimumRentalAge, MINIMUM_RENTAL_AGE } from '../utils/validators';
-import { buildSignedWaiverPdf, WaiverFormInput } from '../utils/waiverPdf';
+import { buildWaiverPdfFromRecord, WaiverFormInput } from '../utils/waiverPdf';
 
 const MAX_MINORS = 3;
 const MAX_FIELD_LENGTH = 200;
@@ -110,10 +110,7 @@ class WaiverController {
                 return res.status(400).json({ success: false, message: formError });
             }
 
-            // Build the PDF before marking the account as signed, so a PDF failure can't leave a half-signed account.
-            console.log('🔄 Filling waiver PDF...');
-            const signedPdf = await buildSignedWaiverPdf(normalizeWaiverForm(form), signature);
-
+            // Store the answers rather than a generated PDF; the PDF is built when requested.
             console.log('🔄 Updating user record...');
             const user = await User.findByIdAndUpdate(
                 userId,
@@ -137,7 +134,7 @@ class WaiverController {
                     signature,
                     dateOfBirth: new Date(dateOfBirth),
                     dateSigned: new Date(),
-                    signedPdf,
+                    form: normalizeWaiverForm(form),
                 },
                 { upsert: true, new: true, runValidators: true }
             );
@@ -174,14 +171,20 @@ class WaiverController {
                 return res.status(401).json({ success: false, message: 'Not authenticated' });
             }
 
-            const waiver = await Waiver.findOne({ userId }).select('+signedPdf').sort({ dateSigned: -1 });
-            if (!waiver?.signedPdf) {
-                return res.status(404).json({ success: false, message: 'No signed waiver PDF on file' });
+            const waiver = await Waiver.findOne({ userId }).sort({ dateSigned: -1 });
+            if (!waiver?.form) {
+                return res.status(404).json({ success: false, message: 'No signed waiver on file to download' });
             }
+
+            const pdf = await buildWaiverPdfFromRecord({
+                form: waiver.form as WaiverFormInput,
+                signature: waiver.signature,
+                dateSigned: waiver.dateSigned,
+            });
 
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', 'attachment; filename="KayakVendor_Waiver.pdf"');
-            res.status(200).send(waiver.signedPdf);
+            res.status(200).send(pdf);
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error downloading waiver', error: safeError(error) });
         }

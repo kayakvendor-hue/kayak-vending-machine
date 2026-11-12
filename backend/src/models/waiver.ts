@@ -18,11 +18,10 @@ const waiverSchema = new Schema({
         type: Date,
         default: Date.now
     },
-    // The completed waiver PDF (fields filled, signatures stamped). Excluded from
-    // default queries because it is large; fetch with .select('+signedPdf').
-    signedPdf: {
-        type: Buffer,
-        select: false
+    // The answers entered on the waiver form. The PDF is built from this on request
+    // rather than stored. Records signed before this field existed have no form.
+    form: {
+        type: Schema.Types.Mixed
     }
 });
 

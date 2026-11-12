@@ -5,6 +5,7 @@ import User from '../models/user';
 import Kayak from '../models/kayak';
 import Waiver from '../models/waiver';
 import { safeError } from '../utils/errorResponse';
+import { buildWaiverPdfFromRecord, WaiverFormInput } from '../utils/waiverPdf';
 
 class AdminController {
     // Get all rentals with user and kayak details
@@ -155,19 +156,25 @@ class AdminController {
         }
     }
 
-    // Download a user's signed waiver PDF (the completed, filled-in template)
+    // Build a user's signed waiver PDF on request from the stored answers (nothing is saved)
     async downloadUserWaiverPdf(req: AuthRequest, res: Response) {
         try {
             const { userId } = req.params;
 
-            const waiver = await Waiver.findOne({ userId }).select('+signedPdf').sort({ dateSigned: -1 });
-            if (!waiver?.signedPdf) {
-                return res.status(404).json({ success: false, message: 'No signed waiver PDF on file for this user' });
+            const waiver = await Waiver.findOne({ userId }).sort({ dateSigned: -1 });
+            if (!waiver?.form) {
+                return res.status(404).json({ success: false, message: 'No signed waiver on file for this user' });
             }
+
+            const pdf = await buildWaiverPdfFromRecord({
+                form: waiver.form as WaiverFormInput,
+                signature: waiver.signature,
+                dateSigned: waiver.dateSigned,
+            });
 
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename="KayakVendor_Waiver_${userId}.pdf"`);
-            res.status(200).send(waiver.signedPdf);
+            res.status(200).send(pdf);
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error downloading waiver', error: safeError(error) });
         }

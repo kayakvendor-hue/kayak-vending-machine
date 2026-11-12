@@ -70,11 +70,12 @@ const drawSignature = async (
 // Fills the template's form fields, flattens them, and stamps the drawn signatures onto the signature areas.
 export const buildSignedWaiverPdf = async (
     input: WaiverFormInput,
-    renterSignatureDataUrl: string
+    renterSignatureDataUrl: string,
+    signedAt: Date
 ): Promise<Buffer> => {
     const pdfDoc = await PDFDocument.load(fs.readFileSync(TEMPLATE_PATH));
     const form = pdfDoc.getForm();
-    const today = formatDate(new Date());
+    const today = formatDate(signedAt);
 
     const setText = (fieldName: string, value: string) => form.getTextField(fieldName).setText(value);
 
@@ -115,3 +116,11 @@ export const buildSignedWaiverPdf = async (
 
     return Buffer.from(await pdfDoc.save());
 };
+
+// Builds the PDF on demand from a stored waiver record. Nothing is saved to the database.
+export const buildWaiverPdfFromRecord = (record: {
+    form: WaiverFormInput;
+    signature: string;
+    dateSigned: Date;
+}): Promise<Buffer> => buildSignedWaiverPdf(record.form, record.signature, record.dateSigned);
+

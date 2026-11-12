@@ -6,6 +6,7 @@ import CameraCapture from '../components/CameraCapture';
 import PageHeader from '../components/PageHeader';
 import MediaGallery from '../components/MediaGallery';
 import SignaturePad from '../components/SignaturePad';
+import WaiverDocument from '../components/WaiverDocument';
 
 interface Kayak {
     _id: string;
@@ -447,27 +448,34 @@ const Rent: React.FC = () => {
         </div>
     );
 
-    // First-time signers fill in their details here; the answers are written into the PDF.
-    const renterInfoForm = waiverSigned ? null : (
-        <div style={{ border: '1px solid #ccc', padding: '15px', marginBottom: '20px', borderRadius: '5px', backgroundColor: '#fff', color: '#000' }}>
-            <h4 style={{ marginTop: 0 }}>Your Information</h4>
+    // Fill-in fields placed inside the waiver text, in the same places as the PDF's form fields.
+    const renterBlock = waiverSigned ? undefined : (
+        <div>
             {renderTextInput('Full name', renterName, setRenterName)}
             {renderTextInput('Address', renterAddress, setRenterAddress)}
             {renderTextInput('Phone', renterPhone, setRenterPhone, 'tel')}
             {renderTextInput('Email', renterEmail, setRenterEmail, 'email')}
+            <div>
+                <label style={labelStyle}>Date of birth</label>
+                <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} max={maxDateOfBirth} style={inputStyle} />
+                {dateOfBirth && calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE && (
+                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#c62828', fontWeight: 'bold' }}>
+                        You must be at least {MINIMUM_RENTAL_AGE} to rent. Based on this date, you are {calculateAge(dateOfBirth)}.
+                    </p>
+                )}
+            </div>
 
-            <h4>Emergency Contact</h4>
+            <p style={{ ...labelStyle, marginTop: '12px' }}>Emergency Contact</p>
             {renderTextInput('Name', emergencyName, setEmergencyName)}
             {renderTextInput('Relationship', emergencyRelationship, setEmergencyRelationship)}
             {renderTextInput('Phone', emergencyPhone, setEmergencyPhone, 'tel')}
 
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '15px' }}>
                 <input type="checkbox" checked={safetyVideoWatched} onChange={(e) => setSafetyVideoWatched(e.target.checked)} style={{ width: '20px', height: '20px', marginTop: '2px' }} />
-                <span style={{ fontSize: '14px' }}>I have watched the company's safety video.</span>
+                <span>I have watched the company's safety video.</span>
             </label>
 
-            <h4>Children (under {MINIMUM_RENTAL_AGE})</h4>
-            <p style={{ fontSize: '13px', color: '#666', marginTop: 0 }}>Is anyone under {MINIMUM_RENTAL_AGE} joining this trip?</p>
+            <p style={{ ...labelStyle, marginTop: '12px' }}>Is anyone under {MINIMUM_RENTAL_AGE} joining this trip?</p>
             <label style={{ marginRight: '20px' }}>
                 <input
                     type="radio"
@@ -492,53 +500,59 @@ const Rent: React.FC = () => {
                 /> Yes
             </label>
 
-            {hasChildren && (
-                <div style={{ marginTop: '15px' }}>
-                    {minors.map((minor, i) => (
-                        <div key={i} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
-                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Child #{i + 1}</p>
-                            {renderTextInput('Full name', minor.name, (v) => updateMinorField(i, 'name', v))}
-                            <div>
-                                <label style={labelStyle}>Date of birth</label>
-                                <input
-                                    type="date"
-                                    value={minor.dateOfBirth}
-                                    onChange={(e) => updateMinorField(i, 'dateOfBirth', e.target.value)}
-                                    style={inputStyle}
-                                />
-                            </div>
-                            {minor.dateOfBirth && calculateAge(minor.dateOfBirth) >= MINIMUM_RENTAL_AGE && (
-                                <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#c62828', fontWeight: 'bold' }}>
-                                    Children must be under {MINIMUM_RENTAL_AGE}. Adults sign for themselves below.
-                                </p>
-                            )}
-                            {minors.length > 1 && (
-                                <button type="button" onClick={() => removeMinor(i)} style={{ backgroundColor: '#666' }}>
-                                    Remove child
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                    {minors.length < WAIVER_MAX_MINORS && (
-                        <button
-                            type="button"
-                            onClick={() => updateMinors([...minors, { name: '', dateOfBirth: '' }])}
-                            style={{ marginBottom: '15px' }}
-                        >
-                            + Add another child
-                        </button>
-                    )}
-
-                    <h4>Parent/Guardian</h4>
-                    {renderTextInput('Full name', guardian.name, (v) => setGuardian({ ...guardian, name: v }))}
-                    {renderTextInput('Relationship to the children', guardian.relationship, (v) => setGuardian({ ...guardian, relationship: v }))}
-                    {renderTextInput('Phone', guardian.phone, (v) => setGuardian({ ...guardian, phone: v }), 'tel')}
-                    <label style={labelStyle}>Parent/Guardian Signature (for the children listed above):</label>
-                    <SignaturePad onChange={setGuardianSignature} />
-                </div>
-            )}
+            <p style={{ ...labelStyle, marginTop: '12px' }}>Signature</p>
+            <SignaturePad onChange={setSignatureDataUrl} />
+            <p style={{ margin: '8px 0 0 0' }}><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
         </div>
     );
+
+    // Minor and parent/guardian fields, shown inside the Parent or Guardian Release when a child is riding.
+    const guardianBlock = (!waiverSigned && hasChildren) ? (
+        <div>
+            {minors.map((minor, i) => (
+                <div key={i} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
+                    <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Minor #{i + 1}</p>
+                    {renderTextInput("Minor's name", minor.name, (v) => updateMinorField(i, 'name', v))}
+                    <div>
+                        <label style={labelStyle}>Date of birth</label>
+                        <input
+                            type="date"
+                            value={minor.dateOfBirth}
+                            onChange={(e) => updateMinorField(i, 'dateOfBirth', e.target.value)}
+                            style={inputStyle}
+                        />
+                    </div>
+                    {minor.dateOfBirth && calculateAge(minor.dateOfBirth) >= MINIMUM_RENTAL_AGE && (
+                        <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#c62828', fontWeight: 'bold' }}>
+                            Children must be under {MINIMUM_RENTAL_AGE}. Adults sign for themselves.
+                        </p>
+                    )}
+                    {minors.length > 1 && (
+                        <button type="button" onClick={() => removeMinor(i)} style={{ backgroundColor: '#666' }}>
+                            Remove minor
+                        </button>
+                    )}
+                </div>
+            ))}
+            {minors.length < WAIVER_MAX_MINORS && (
+                <button
+                    type="button"
+                    onClick={() => updateMinors([...minors, { name: '', dateOfBirth: '' }])}
+                    style={{ marginBottom: '15px' }}
+                >
+                    + Add another minor
+                </button>
+            )}
+
+            <p style={{ ...labelStyle, marginTop: '12px' }}>Parent/Guardian</p>
+            {renderTextInput('Full name', guardian.name, (v) => setGuardian({ ...guardian, name: v }))}
+            {renderTextInput('Relationship to the minor(s)', guardian.relationship, (v) => setGuardian({ ...guardian, relationship: v }))}
+            {renderTextInput('Phone', guardian.phone, (v) => setGuardian({ ...guardian, phone: v }), 'tel')}
+            <label style={labelStyle}>Parent/Guardian Signature</label>
+            <SignaturePad onChange={setGuardianSignature} />
+            <p style={{ margin: '8px 0 0 0' }}><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+        </div>
+    ) : undefined;
 
     const continueDisabled = !waiverCheckbox
         || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl || !!validateWaiverForm()))
@@ -580,14 +594,6 @@ const Rent: React.FC = () => {
                             ? 'Your signed waiver is below. Confirm it for this rental.'
                             : 'Read the waiver below, fill in the form, and sign. Your answers are filled into the waiver for you.'}
                     </p>
-                    <iframe
-                        src="/waiver-template.pdf"
-                        title="Liability waiver"
-                        style={{ width: '100%', height: '500px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#fff', marginBottom: '8px' }}
-                    />
-                    <p style={{ fontSize: '13px', margin: '0 0 15px 0' }}>
-                        <a href="/waiver-template.pdf" target="_blank" rel="noopener noreferrer">Open the waiver in a new tab</a>
-                    </p>
                     {waiverSigned && (
                         <button
                             type="button"
@@ -598,48 +604,7 @@ const Rent: React.FC = () => {
                         </button>
                     )}
 
-                    {renterInfoForm}
-
-                    {!waiverSigned && (
-                        <div style={{
-                            border: '1px solid #ccc',
-                            padding: '15px',
-                            marginBottom: '20px',
-                            borderRadius: '5px',
-                            backgroundColor: '#fff',
-                            color: '#000'
-                        }}>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Date of Birth:</label>
-                                <input
-                                    type="date"
-                                    value={dateOfBirth}
-                                    onChange={(e) => setDateOfBirth(e.target.value)}
-                                    max={maxDateOfBirth}
-                                    required
-                                />
-                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
-                                    You must be at least {MINIMUM_RENTAL_AGE} years old to rent a kayak.
-                                </p>
-                                {dateOfBirth && calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE && (
-                                    <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#c62828', fontWeight: 'bold' }}>
-                                        You must be at least {MINIMUM_RENTAL_AGE} to rent. Based on this date, you are {calculateAge(dateOfBirth)}.
-                                    </p>
-                                )}
-                            </div>
-                            <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
-                                <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
-                            </p>
-                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Signature:</label>
-                            <SignaturePad onChange={setSignatureDataUrl} />
-                        </div>
-                    )}
-
-                    {waiverSigned && (
-                        <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
-                            <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
-                        </p>
-                    )}
+                    <WaiverDocument renterBlock={renterBlock} guardianBlock={guardianBlock} />
 
                     {kayakQuantity > 1 && (
                         <div style={{
