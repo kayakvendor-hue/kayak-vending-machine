@@ -56,6 +56,7 @@ interface AdminUser {
 }
 
 interface SignatureModalData {
+    userId: string;
     userName: string;
     signature: string;
     dateOfBirth: string;
@@ -160,12 +161,27 @@ const Admin: React.FC = () => {
         }
     };
 
+    const handleDownloadWaiverPdf = async (userId: string, userName: string) => {
+        try {
+            const response = await api.get(`/api/admin/users/${userId}/waiver/pdf`, { responseType: 'blob' });
+            const url = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `KayakVendor_Waiver_${userName.replace(/[^a-z0-9]+/gi, '_')}.pdf`;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('No signed waiver PDF on file for this user. Users who signed before the PDF waiver was added will need to sign again.');
+        }
+    };
+
     const handleViewSignature = async (user: AdminUser) => {
         setLoadingSignatureUserId(user._id);
         try {
             const response = await api.get(`/api/admin/users/${user._id}/waiver`);
             const waiver = response.data.waiver;
             setSignatureModalData({
+                userId: user._id,
                 userName: user.name || user.email,
                 signature: waiver.signature,
                 dateOfBirth: waiver.dateOfBirth,
@@ -1295,6 +1311,12 @@ const Admin: React.FC = () => {
                                 borderRadius: '5px'
                             }}
                         />
+                        <button
+                            onClick={() => handleDownloadWaiverPdf(signatureModalData.userId, signatureModalData.userName)}
+                            style={{ marginTop: '15px', backgroundColor: '#28a745' }}
+                        >
+                            Download Signed Waiver (PDF)
+                        </button>
                         <button
                             onClick={() => setSignatureModalData(null)}
                             style={{

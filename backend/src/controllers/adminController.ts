@@ -155,6 +155,24 @@ class AdminController {
         }
     }
 
+    // Download a user's signed waiver PDF (the completed, filled-in template)
+    async downloadUserWaiverPdf(req: AuthRequest, res: Response) {
+        try {
+            const { userId } = req.params;
+
+            const waiver = await Waiver.findOne({ userId }).select('+signedPdf').sort({ dateSigned: -1 });
+            if (!waiver?.signedPdf) {
+                return res.status(404).json({ success: false, message: 'No signed waiver PDF on file for this user' });
+            }
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="KayakVendor_Waiver_${userId}.pdf"`);
+            res.status(200).send(waiver.signedPdf);
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error downloading waiver', error: safeError(error) });
+        }
+    }
+
     // Get a single user's waiver record (signature image + date of birth + date signed)
     async getUserWaiver(req: AuthRequest, res: Response) {
         try {

@@ -14,6 +14,14 @@ interface Kayak {
     isAvailable: boolean;
 }
 
+interface WaiverMinor {
+    name: string;
+    dateOfBirth: string;
+}
+
+// The waiver PDF has room for three minors.
+const WAIVER_MAX_MINORS = 3;
+
 const Rent: React.FC = () => {
     const [kayaks, setKayaks] = useState<Kayak[]>([]);
     const [kayakQuantity, setKayakQuantity] = useState(1);
@@ -28,6 +36,17 @@ const Rent: React.FC = () => {
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [waiverConfirmedAt, setWaiverConfirmedAt] = useState<string | null>(null);
+    const [renterName, setRenterName] = useState('');
+    const [renterAddress, setRenterAddress] = useState('');
+    const [renterPhone, setRenterPhone] = useState('');
+    const [renterEmail, setRenterEmail] = useState('');
+    const [emergencyName, setEmergencyName] = useState('');
+    const [emergencyRelationship, setEmergencyRelationship] = useState('');
+    const [emergencyPhone, setEmergencyPhone] = useState('');
+    const [safetyVideoWatched, setSafetyVideoWatched] = useState(false);
+    const [hasChildren, setHasChildren] = useState(false);
+    const [minors, setMinors] = useState<WaiverMinor[]>([]);
+    const [guardian, setGuardian] = useState({ name: '', relationship: '', phone: '' });
 
     // Waiver and payment steps are shown on this same URL, so scroll to the top of each step.
     useEffect(() => {
@@ -188,10 +207,17 @@ const Rent: React.FC = () => {
         setWaiverCheckbox(false);
         setDateOfBirth('');
         setSignatureDataUrl(null);
-        setNumberOfKids(0);
-        setChildNames([]);
-        setGuardianSignature(null);
-        setAdultRiders(Array.from({ length: Math.max(0, kayakQuantity - 1) }, () => ({ dateOfBirth: '', signature: null })));
+        // First-time signers keep the children entered in the waiver form; returning
+        // users list children in the rider section, so it starts empty for them.
+        if (waiverSigned) {
+            setNumberOfKids(0);
+            setChildNames([]);
+            setGuardianSignature(null);
+        } else {
+            updateMinors(minors);
+        }
+        const kidCount = waiverSigned ? 0 : minors.length;
+        setAdultRiders(Array.from({ length: Math.max(0, kayakQuantity - 1 - kidCount) }, () => ({ dateOfBirth: '', signature: null })));
         setShowWaiver(true);
         setError('');
     };
@@ -211,6 +237,82 @@ const Rent: React.FC = () => {
         setShowWaiver(false);
         setShowPayment(true);
         setError('');
+    };
+
+    const updateMinors = (next: WaiverMinor[]) => {
+        setMinors(next);
+        handleNumberOfKidsChange(next.length);
+        setChildNames(next.map(m => m.name));
+    };
+
+    const updateMinorField = (index: number, field: keyof WaiverMinor, value: string) => {
+        updateMinors(minors.map((m, i) => (i === index ? { ...m, [field]: value } : m)));
+    };
+
+    const removeMinor = (index: number) => {
+        updateMinors(minors.filter((_, i) => i !== index));
+    };
+
+    // Returns an error message if the first-time waiver form isn't complete/valid, else null.
+    const validateWaiverForm = (): string | null => {
+        if (!renterName.trim()) return 'Please enter your full name';
+        if (!renterAddress.trim()) return 'Please enter your address';
+        if (!renterPhone.trim()) return 'Please enter your phone number';
+        if (!renterEmail.trim()) return 'Please enter your email';
+        if (!emergencyName.trim() || !emergencyRelationship.trim() || !emergencyPhone.trim()) {
+            return 'Please complete the emergency contact';
+        }
+        if (!safetyVideoWatched) return 'Please confirm you have watched the safety video';
+        if (hasChildren) {
+            if (minors.length === 0) return 'Please add at least one child';
+            for (let i = 0; i < minors.length; i++) {
+                const minor = minors[i];
+                if (!minor.name.trim()) return `Please enter a name for child #${i + 1}`;
+                if (!minor.dateOfBirth) return `Please enter a date of birth for child #${i + 1}`;
+                if (calculateAge(minor.dateOfBirth) >= MINIMUM_RENTAL_AGE) {
+                    return `Child #${i + 1} must be under ${MINIMUM_RENTAL_AGE}. Adults sign for themselves.`;
+                }
+            }
+            if (!guardian.name.trim() || !guardian.relationship.trim() || !guardian.phone.trim()) {
+                return 'Please complete the parent/guardian details';
+            }
+            if (!guardianSignature) return 'Please collect a parent/guardian signature';
+        }
+        return null;
+    };
+
+    const cancelWaiver = () => {
+        setShowWaiver(false);
+        setWaiverCheckbox(false);
+        setDateOfBirth('');
+        setSignatureDataUrl(null);
+        setRenterName('');
+        setRenterAddress('');
+        setRenterPhone('');
+        setRenterEmail('');
+        setEmergencyName('');
+        setEmergencyRelationship('');
+        setEmergencyPhone('');
+        setSafetyVideoWatched(false);
+        setHasChildren(false);
+        setGuardian({ name: '', relationship: '', phone: '' });
+        setGuardianSignature(null);
+        updateMinors([]);
+        setAdultRiders([]);
+    };
+
+    const downloadSignedWaiver = async () => {
+        try {
+            const response = await api.get('/api/waiver/pdf', { responseType: 'blob' });
+            const url = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'KayakVendor_Signed_Waiver.pdf';
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError('Could not download your signed waiver. Please try again.');
+        }
     };
 
     // First-ever rental: captures date of birth + drawn signature and stores the master waiver.
@@ -237,8 +339,31 @@ const Rent: React.FC = () => {
             return;
         }
 
+        const formError = validateWaiverForm();
+        if (formError) {
+            setError(formError);
+            return;
+        }
+
+        const form = {
+            renterName: renterName.trim(),
+            address: renterAddress.trim(),
+            phone: renterPhone.trim(),
+            email: renterEmail.trim(),
+            emergencyName: emergencyName.trim(),
+            emergencyRelationship: emergencyRelationship.trim(),
+            emergencyPhone: emergencyPhone.trim(),
+            minors: minors.map(m => ({ name: m.name.trim(), dateOfBirth: m.dateOfBirth })),
+            guardian: minors.length > 0 && guardianSignature ? {
+                name: guardian.name.trim(),
+                relationship: guardian.relationship.trim(),
+                phone: guardian.phone.trim(),
+                signature: guardianSignature
+            } : undefined
+        };
+
         try {
-            await api.post('/api/waiver/sign', { signature: signatureDataUrl, dateOfBirth });
+            await api.post('/api/waiver/sign', { signature: signatureDataUrl, dateOfBirth, form });
             setWaiverSigned(true);
             proceedToPayment(new Date().toISOString());
         } catch (err: any) {
@@ -312,6 +437,113 @@ const Rent: React.FC = () => {
         setShowPayment(false);
     };
 
+    const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '8px', marginBottom: '12px' };
+    const labelStyle: React.CSSProperties = { display: 'block', fontWeight: 'bold', marginBottom: '5px' };
+
+    const renderTextInput = (label: string, value: string, onChange: (v: string) => void, type = 'text') => (
+        <div>
+            <label style={labelStyle}>{label}</label>
+            <input type={type} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+        </div>
+    );
+
+    // First-time signers fill in their details here; the answers are written into the PDF.
+    const renterInfoForm = waiverSigned ? null : (
+        <div style={{ border: '1px solid #ccc', padding: '15px', marginBottom: '20px', borderRadius: '5px', backgroundColor: '#fff', color: '#000' }}>
+            <h4 style={{ marginTop: 0 }}>Your Information</h4>
+            {renderTextInput('Full name', renterName, setRenterName)}
+            {renderTextInput('Address', renterAddress, setRenterAddress)}
+            {renderTextInput('Phone', renterPhone, setRenterPhone, 'tel')}
+            {renderTextInput('Email', renterEmail, setRenterEmail, 'email')}
+
+            <h4>Emergency Contact</h4>
+            {renderTextInput('Name', emergencyName, setEmergencyName)}
+            {renderTextInput('Relationship', emergencyRelationship, setEmergencyRelationship)}
+            {renderTextInput('Phone', emergencyPhone, setEmergencyPhone, 'tel')}
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '15px' }}>
+                <input type="checkbox" checked={safetyVideoWatched} onChange={(e) => setSafetyVideoWatched(e.target.checked)} style={{ width: '20px', height: '20px', marginTop: '2px' }} />
+                <span style={{ fontSize: '14px' }}>I have watched the company's safety video.</span>
+            </label>
+
+            <h4>Children (under {MINIMUM_RENTAL_AGE})</h4>
+            <p style={{ fontSize: '13px', color: '#666', marginTop: 0 }}>Is anyone under {MINIMUM_RENTAL_AGE} joining this trip?</p>
+            <label style={{ marginRight: '20px' }}>
+                <input
+                    type="radio"
+                    name="waiverHasChildren"
+                    checked={!hasChildren}
+                    onChange={() => {
+                        setHasChildren(false);
+                        setGuardianSignature(null);
+                        updateMinors([]);
+                    }}
+                /> No
+            </label>
+            <label>
+                <input
+                    type="radio"
+                    name="waiverHasChildren"
+                    checked={hasChildren}
+                    onChange={() => {
+                        setHasChildren(true);
+                        if (minors.length === 0) updateMinors([{ name: '', dateOfBirth: '' }]);
+                    }}
+                /> Yes
+            </label>
+
+            {hasChildren && (
+                <div style={{ marginTop: '15px' }}>
+                    {minors.map((minor, i) => (
+                        <div key={i} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
+                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Child #{i + 1}</p>
+                            {renderTextInput('Full name', minor.name, (v) => updateMinorField(i, 'name', v))}
+                            <div>
+                                <label style={labelStyle}>Date of birth</label>
+                                <input
+                                    type="date"
+                                    value={minor.dateOfBirth}
+                                    onChange={(e) => updateMinorField(i, 'dateOfBirth', e.target.value)}
+                                    style={inputStyle}
+                                />
+                            </div>
+                            {minor.dateOfBirth && calculateAge(minor.dateOfBirth) >= MINIMUM_RENTAL_AGE && (
+                                <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#c62828', fontWeight: 'bold' }}>
+                                    Children must be under {MINIMUM_RENTAL_AGE}. Adults sign for themselves below.
+                                </p>
+                            )}
+                            {minors.length > 1 && (
+                                <button type="button" onClick={() => removeMinor(i)} style={{ backgroundColor: '#666' }}>
+                                    Remove child
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                    {minors.length < WAIVER_MAX_MINORS && (
+                        <button
+                            type="button"
+                            onClick={() => updateMinors([...minors, { name: '', dateOfBirth: '' }])}
+                            style={{ marginBottom: '15px' }}
+                        >
+                            + Add another child
+                        </button>
+                    )}
+
+                    <h4>Parent/Guardian</h4>
+                    {renderTextInput('Full name', guardian.name, (v) => setGuardian({ ...guardian, name: v }))}
+                    {renderTextInput('Relationship to the children', guardian.relationship, (v) => setGuardian({ ...guardian, relationship: v }))}
+                    {renderTextInput('Phone', guardian.phone, (v) => setGuardian({ ...guardian, phone: v }), 'tel')}
+                    <label style={labelStyle}>Parent/Guardian Signature (for the children listed above):</label>
+                    <SignaturePad onChange={setGuardianSignature} />
+                </div>
+            )}
+        </div>
+    );
+
+    const continueDisabled = !waiverCheckbox
+        || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl || !!validateWaiverForm()))
+        || !!validateAdditionalRiders();
+
     if (loading) {
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
@@ -343,36 +575,30 @@ const Rent: React.FC = () => {
             {showWaiver ? (
                 <div style={{ maxWidth: '600px', margin: '0 auto' }}>
                     <h2>Liability Waiver</h2>
-                    <div style={{ 
-                        border: '1px solid #ccc', 
-                        padding: '20px', 
-                        marginBottom: '20px',
-                        maxHeight: '300px',
-                        overflowY: 'scroll',
-                        backgroundColor: '#f9f9f9',
-                        borderRadius: '5px',
-                        color: '#000'
-                    }}>
-                        <h3>KAYAK RENTAL LIABILITY WAIVER AND RELEASE</h3>
-                        <p><strong>PLEASE READ CAREFULLY BEFORE {waiverSigned ? 'CONFIRMING' : 'SIGNING'}</strong></p>
-                        
-                        <p>I understand that kayaking involves inherent risks including, but not limited to: drowning, injury from capsizing, collision with objects or other watercraft, exposure to weather conditions, and other water-related hazards.</p>
-                        
-                        <p>In consideration of being permitted to rent and use kayaking equipment, I hereby:</p>
-                        
-                        <ol>
-                            <li>ACKNOWLEDGE that I am physically fit and have the skills necessary to safely participate in kayaking activities.</li>
-                            <li>AGREE to inspect all equipment before use and will not use any equipment that appears unsafe.</li>
-                            <li>AGREE to wear a U.S. Coast Guard approved life jacket at all times while on the water.</li>
-                            <li>AGREE to follow all safety instructions and local boating regulations.</li>
-                            <li>ASSUME all risks associated with kayaking, including injury, death, or property damage.</li>
-                            <li>RELEASE AND DISCHARGE the kayak rental company, its owners, employees, and agents from any and all liability for injury, death, or property damage arising from my use of the rental equipment.</li>
-                            <li>AGREE to return the equipment in the same condition as received and by the agreed return time.</li>
-                            <li>AGREE to pay for any damage to or loss of equipment.</li>
-                        </ol>
-                        
-                        <p><strong>I HAVE READ THIS WAIVER AND RELEASE, UNDERSTAND IT, AND {waiverSigned ? 'RE-AFFIRM' : 'SIGN'} IT VOLUNTARILY.</strong></p>
-                    </div>
+                    <p style={{ fontSize: '14px', marginBottom: '10px' }}>
+                        {waiverSigned
+                            ? 'Your signed waiver is below. Confirm it for this rental.'
+                            : 'Read the waiver below, fill in the form, and sign. Your answers are filled into the waiver for you.'}
+                    </p>
+                    <iframe
+                        src="/waiver-template.pdf"
+                        title="Liability waiver"
+                        style={{ width: '100%', height: '500px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#fff', marginBottom: '8px' }}
+                    />
+                    <p style={{ fontSize: '13px', margin: '0 0 15px 0' }}>
+                        <a href="/waiver-template.pdf" target="_blank" rel="noopener noreferrer">Open the waiver in a new tab</a>
+                    </p>
+                    {waiverSigned && (
+                        <button
+                            type="button"
+                            onClick={downloadSignedWaiver}
+                            style={{ marginBottom: '20px', backgroundColor: '#28a745' }}
+                        >
+                            Download my signed waiver (PDF)
+                        </button>
+                    )}
+
+                    {renterInfoForm}
 
                     {!waiverSigned && (
                         <div style={{
@@ -430,6 +656,7 @@ const Rent: React.FC = () => {
                                 be listed by name under a parent/guardian's signature, and any other adults must sign for themselves.
                             </p>
 
+                            {waiverSigned && (
                             <div style={{ marginBottom: '15px' }}>
                                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
                                     Number of children (under {MINIMUM_RENTAL_AGE}) in your group:
@@ -446,8 +673,9 @@ const Rent: React.FC = () => {
                                     Additional adults: {otherAdultsCount}
                                 </p>
                             </div>
+                            )}
 
-                            {numberOfKids > 0 && (
+                            {waiverSigned && numberOfKids > 0 && (
                                 <div style={{ marginBottom: '15px', paddingTop: '10px', borderTop: '1px dashed #ccc' }}>
                                     <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Children</p>
                                     {childNames.map((name, i) => (
@@ -529,16 +757,7 @@ const Rent: React.FC = () => {
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <button 
                             type="button" 
-                            onClick={() => {
-                                setShowWaiver(false);
-                                setWaiverCheckbox(false);
-                                setDateOfBirth('');
-                                setSignatureDataUrl(null);
-                                setNumberOfKids(0);
-                                setChildNames([]);
-                                setGuardianSignature(null);
-                                setAdultRiders([]);
-                            }}
+                            onClick={cancelWaiver}
                             style={{ flex: 1, backgroundColor: '#666' }}
                         >
                             Cancel
@@ -546,8 +765,8 @@ const Rent: React.FC = () => {
                         <button 
                             type="button" 
                             onClick={waiverSigned ? handleConfirmWaiver : handleSignWaiver}
-                            disabled={!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()}
-                            style={{ flex: 2, opacity: (!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()) ? 0.5 : 1 }}
+                            disabled={continueDisabled}
+                            style={{ flex: 2, opacity: continueDisabled ? 0.5 : 1 }}
                         >
                             {waiverSigned ? 'Confirm and Continue' : 'Sign and Continue'}
                         </button>

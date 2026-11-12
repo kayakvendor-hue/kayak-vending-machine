@@ -12,6 +12,7 @@ router.get('/rentals/active', authenticate, requireAdmin, adminController.getAct
 router.get('/stats', authenticate, requireAdmin, adminController.getStats);
 router.get('/users', authenticate, requireAdmin, adminController.getAllUsers);
 router.get('/users/:userId/waiver', authenticate, requireAdmin, adminController.getUserWaiver);
+router.get('/users/:userId/waiver/pdf', authenticate, requireAdmin, adminController.downloadUserWaiverPdf);
 router.put('/kayak/availability', authenticate, requireAdmin, adminController.updateKayakAvailability);
 router.get('/kayaks', authenticate, requireAdmin, adminController.getAllKayaks);
 router.put('/kayak/details', authenticate, requireAdmin, adminController.updateKayakDetails);
