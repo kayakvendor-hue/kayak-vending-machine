@@ -98,27 +98,9 @@ class GatewayController {
     public async checkGatewayOnline(req: AuthRequest, res: Response): Promise<void> {
         try {
             const ttlockService = this.getTTLockService();
-            const testLockId = 18499305; // Kayak #2 - most reliable signal (-63 STRONG RSSI)
-            
-            // Try 3 times to query lock state
-            let isOnline = false;
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    console.log(`🔍 Gateway online check - attempt ${attempt}/3...`);
-                    const lockState = await ttlockService.getLockState(testLockId);
-                    // If we got a response, gateway is online
-                    isOnline = true;
-                    console.log(`✅ Gateway online check passed on attempt ${attempt}`);
-                    break;
-                } catch (err) {
-                    console.log(`⚠️ Gateway online check attempt ${attempt} failed, retrying...`);
-                    if (attempt === 3) {
-                        // All 3 attempts failed
-                        console.log('❌ Gateway online check failed after 3 attempts');
-                    }
-                    // Continue to next attempt
-                }
-            }
+            const gatewayId = 2245851; // Kayak G4 gateway ID from TTLock
+
+            const isOnline = await ttlockService.isGatewayOnline(gatewayId);
 
             res.status(200).json({
                 success: true,

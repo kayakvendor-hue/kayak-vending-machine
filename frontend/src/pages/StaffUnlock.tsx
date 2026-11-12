@@ -102,7 +102,7 @@ const StaffUnlock: React.FC = () => {
             )}
 
             <div className="staff-header">
-                <h2>Active Rentals - Remote Unlock</h2>
+                <h2 className="heading-backdrop">Active Rentals - Remote Unlock</h2>
                 <p className="subtitle">Use this page to remotely unlock kayaks via TTLock Gateway</p>
                 <button onClick={fetchActiveRentals} className="btn btn-secondary">
                     Refresh List
@@ -127,7 +127,7 @@ const StaffUnlock: React.FC = () => {
                                             fontSize: '12px',
                                             fontWeight: 'bold'
                                         }}>
-                                            ⚠️ OVERDUE
+                                            OVERDUE
                                         </span>
                                     )}
                                     {unlockedKayaks.has(rental._id) && (

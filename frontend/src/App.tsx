@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import Waiver from './pages/Waiver';
 import Passcode from './pages/Passcode';
 import Rent from './pages/Rent';
 import Account from './pages/Account';
@@ -16,7 +15,9 @@ import StaffReturn from './pages/StaffReturn';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Resources from './pages/Resources';
+import LearnMore from './pages/LearnMore';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 
 const App: React.FC = () => {
   return (
@@ -28,7 +29,6 @@ const App: React.FC = () => {
         <Route path="/signup" component={Signup} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password/:token" component={ResetPassword} />
-        <Route path="/waiver" component={Waiver} />
         <Route path="/passcode" component={Passcode} />
         <Route path="/rent" component={Rent} />
         <Route path="/account" component={Account} />
@@ -39,7 +39,9 @@ const App: React.FC = () => {
         <Route path="/staff/unlock" component={StaffUnlock} />
         <Route path="/staff/return" component={StaffReturn} />
         <Route path="/resources" component={Resources} />
+        <Route path="/learn-more" component={LearnMore} />
       </Switch>
+      <Footer />
     </Router>
   );
 };

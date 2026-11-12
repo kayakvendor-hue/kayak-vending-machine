@@ -1,6 +1,5 @@
 export interface User {
     id: string;
-    username: string;
     email: string;
     password: string;
 }
@@ -9,6 +8,7 @@ export interface Waiver {
     id: string;
     userId: string;
     signature: string;
+    dateOfBirth: Date;
     dateSigned: Date;
 }
 

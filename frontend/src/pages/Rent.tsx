@@ -5,6 +5,7 @@ import Payment from '../components/Payment';
 import CameraCapture from '../components/CameraCapture';
 import PageHeader from '../components/PageHeader';
 import MediaGallery from '../components/MediaGallery';
+import SignaturePad from '../components/SignaturePad';
 
 interface Kayak {
     _id: string;
@@ -24,6 +25,13 @@ const Rent: React.FC = () => {
     const [waiverSigned, setWaiverSigned] = useState(false);
     const [showWaiver, setShowWaiver] = useState(false);
     const [waiverCheckbox, setWaiverCheckbox] = useState(false);
+    const [dateOfBirth, setDateOfBirth] = useState('');
+    const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+    const [waiverConfirmedAt, setWaiverConfirmedAt] = useState<string | null>(null);
+    const [numberOfKids, setNumberOfKids] = useState(0);
+    const [childNames, setChildNames] = useState<string[]>([]);
+    const [guardianSignature, setGuardianSignature] = useState<string | null>(null);
+    const [adultRiders, setAdultRiders] = useState<{ dateOfBirth: string; signature: string | null }[]>([]);
     const [assignedKayaks, setAssignedKayaks] = useState<any[]>([]);
     const history = useHistory();
 
@@ -33,6 +41,73 @@ const Rent: React.FC = () => {
         '2': { price: 18, discount: 10 },     // 2 hours: $18 (10% off)
         '4': { price: 32, discount: 20 },     // 4 hours: $32 (20% off)
         '8': { price: 50, discount: 38 }      // 8 hours: $50 (38% off - Best Value!)
+    };
+
+    const MINIMUM_RENTAL_AGE = 18;
+
+    const calculateAge = (dob: string): number => {
+        const birthDate = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const hasHadBirthdayThisYear =
+            today.getMonth() > birthDate.getMonth() ||
+            (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+        if (!hasHadBirthdayThisYear) age--;
+        return age;
+    };
+
+    // The latest date of birth that still makes someone at least MINIMUM_RENTAL_AGE today,
+    // used to cap the date picker so underage dates can't even be selected.
+    const maxDateOfBirth = (() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - MINIMUM_RENTAL_AGE);
+        return d.toISOString().split('T')[0];
+    })();
+
+    // When renting more than one kayak, everyone besides the account holder must be
+    // accounted for: children (name only, covered by a guardian's signature) or other
+    // adults (their own signature + date of birth).
+    const otherAdultsCount = Math.max(0, kayakQuantity - 1 - numberOfKids);
+
+    const handleNumberOfKidsChange = (n: number) => {
+        setNumberOfKids(n);
+        setChildNames(prev => {
+            const next = prev.slice(0, n);
+            while (next.length < n) next.push('');
+            return next;
+        });
+        const newAdultCount = Math.max(0, kayakQuantity - 1 - n);
+        setAdultRiders(prev => {
+            const next = prev.slice(0, newAdultCount);
+            while (next.length < newAdultCount) next.push({ dateOfBirth: '', signature: null });
+            return next;
+        });
+    };
+
+    const updateChildName = (index: number, value: string) => {
+        setChildNames(prev => prev.map((name, i) => (i === index ? value : name)));
+    };
+
+    const updateAdultRider = (index: number, field: 'dateOfBirth' | 'signature', value: string | null) => {
+        setAdultRiders(prev => prev.map((rider, i) => (i === index ? { ...rider, [field]: value } : rider)));
+    };
+
+    // Returns an error message if the additional-rider details aren't complete/valid, else null.
+    const validateAdditionalRiders = (): string | null => {
+        if (kayakQuantity <= 1) return null;
+        for (let i = 0; i < childNames.length; i++) {
+            if (!childNames[i].trim()) return `Please enter a name for child #${i + 1}`;
+        }
+        if (numberOfKids > 0 && !guardianSignature) {
+            return 'Please collect a parent/guardian signature for the children listed';
+        }
+        for (let i = 0; i < adultRiders.length; i++) {
+            const rider = adultRiders[i];
+            if (!rider.dateOfBirth) return `Please enter a date of birth for adult rider #${i + 1}`;
+            if (calculateAge(rider.dateOfBirth) < MINIMUM_RENTAL_AGE) return `Adult rider #${i + 1} must be at least ${MINIMUM_RENTAL_AGE} years old`;
+            if (!rider.signature) return `Please collect a signature for adult rider #${i + 1}`;
+        }
+        return null;
     };
 
     useEffect(() => {
@@ -64,7 +139,7 @@ const Rent: React.FC = () => {
         fetchData();
     }, []);
 
-    const handleContinueToPayment = (e?: React.FormEvent) => {
+    const handleContinueToPayment = async (e?: React.FormEvent) => {
         if (e) {
             e.preventDefault();
         }
@@ -85,66 +160,118 @@ const Rent: React.FC = () => {
         // Check if enough kayaks are available
         const availableKayaks = kayaks.filter(k => k.isAvailable);
         if (kayakQuantity > availableKayaks.length) {
+            if (availableKayaks.length === 0) {
+                try {
+                    const statusResponse = await api.get('/api/rental/gateway-status');
+                    if (!statusResponse.data.online) {
+                        setError('Gateway is offline. Please try again later.');
+                        return;
+                    }
+                } catch (err) {
+                    setError('Gateway is offline. Please try again later.');
+                    return;
+                }
+            }
             setError(`Only ${availableKayaks.length} kayak(s) available. Please select fewer kayaks.`);
             return;
         }
 
-        // Check if waiver needs to be signed
-        if (!waiverSigned) {
-            setShowWaiver(true);
-            setError('');
-            return;
-        }
+        // Every rental requires a waiver step: the very first time, the full
+        // signature + date-of-birth form; every time after that, a quick
+        // checkbox re-confirmation. Also reset the additional-rider section
+        // (children/other adults) sized to this rental's kayak quantity.
+        setWaiverCheckbox(false);
+        setDateOfBirth('');
+        setSignatureDataUrl(null);
+        setNumberOfKids(0);
+        setChildNames([]);
+        setGuardianSignature(null);
+        setAdultRiders(Array.from({ length: Math.max(0, kayakQuantity - 1) }, () => ({ dateOfBirth: '', signature: null })));
+        setShowWaiver(true);
+        setError('');
+    };
 
-        // Show payment screen immediately, health check happens in background in Payment component
+    // Moves on to the payment screen once the waiver step for this rental is complete.
+    const proceedToPayment = (confirmedAt: string) => {
+        const availableKayaks = kayaks.filter(k => k.isAvailable);
         const selectedKayakIds = availableKayaks.slice(0, kayakQuantity).map(k => k._id);
-        
+
         const hours = parseInt(rentalDuration);
         const pricingKey = hours.toString();
         const pricing = PRICING[pricingKey];
         const amount = pricing ? pricing.price * kayakQuantity : 0;
         setRentalAmount(amount);
         setAssignedKayaks(selectedKayakIds);
+        setWaiverConfirmedAt(confirmedAt);
+        setShowWaiver(false);
         setShowPayment(true);
         setError('');
     };
 
+    // First-ever rental: captures date of birth + drawn signature and stores the master waiver.
     const handleSignWaiver = async () => {
+        if (!dateOfBirth) {
+            setError('Please enter your date of birth');
+            return;
+        }
+        if (calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE) {
+            setError(`You must be at least ${MINIMUM_RENTAL_AGE} years old to rent a kayak.`);
+            return;
+        }
+        if (!signatureDataUrl) {
+            setError('Please sign using the signature pad');
+            return;
+        }
         if (!waiverCheckbox) {
             setError('Please check the box to agree to the waiver');
             return;
         }
+        const ridersError = validateAdditionalRiders();
+        if (ridersError) {
+            setError(ridersError);
+            return;
+        }
 
         try {
-            await api.post('/api/waiver/sign');
+            await api.post('/api/waiver/sign', { signature: signatureDataUrl, dateOfBirth });
             setWaiverSigned(true);
-            setShowWaiver(false);
-            setError('');
-            
-            // Continue to payment after signing waiver (health check happens in Payment component)
-            const availableKayaks = kayaks.filter(k => k.isAvailable);
-            const selectedKayakIds = availableKayaks.slice(0, kayakQuantity).map(k => k._id);
-            
-            const hours = parseInt(rentalDuration);
-            const pricingKey = hours.toString();
-            const pricing = PRICING[pricingKey];
-            const amount = pricing ? pricing.price * kayakQuantity : 0;
-            setRentalAmount(amount);
-            setAssignedKayaks(selectedKayakIds);
-            setShowPayment(true);
-        } catch (err) {
-            setError('Failed to sign waiver. Please try again.');
+            proceedToPayment(new Date().toISOString());
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to sign waiver. Please try again.');
         }
+    };
+
+    // Every rental after the first: just a checkbox + today's date, no new signature needed.
+    const handleConfirmWaiver = () => {
+        if (!waiverCheckbox) {
+            setError('Please check the box to confirm the waiver');
+            return;
+        }
+        const ridersError = validateAdditionalRiders();
+        if (ridersError) {
+            setError(ridersError);
+            return;
+        }
+        proceedToPayment(new Date().toISOString());
     };
 
     const handlePaymentSuccess = async (paymentId: string) => {
         try {
             console.log('Payment successful, creating rental...');
+            // Build the additional-rider roster (children + other adults) collected during the waiver step
+            const additionalRidersPayload = kayakQuantity > 1 ? [
+                ...childNames.map(name => ({ riderType: 'child', name })),
+                ...adultRiders.map(r => ({ riderType: 'adult', dateOfBirth: r.dateOfBirth, signature: r.signature }))
+            ] : [];
+
             // Complete the rental immediately after payment
             const response = await api.post('/api/rental/rent', {
                 kayakQuantity,
                 rentalDuration: parseInt(rentalDuration) * 3600,
-                paymentIntentId: paymentId
+                paymentIntentId: paymentId,
+                waiverConfirmedAt,
+                additionalRiders: additionalRidersPayload,
+                guardianSignatureForMinors: numberOfKids > 0 ? guardianSignature : undefined
             });
             
             console.log('Rental created successfully:', response.data);
@@ -183,7 +310,7 @@ const Rent: React.FC = () => {
     if (loading) {
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
-                <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚣</div>
+                
                 <h2>Loading available kayaks...</h2>
             </div>
         );
@@ -191,7 +318,7 @@ const Rent: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🚣" title="Rent a Kayak" subtitle="Choose your kayaks and rental duration" />
+            <PageHeader title="Rent a Kayak" subtitle="Choose your kayaks and rental duration" />
             
             {error && (
                 <div style={{ 
@@ -204,7 +331,7 @@ const Rent: React.FC = () => {
                     textAlign: 'center',
                     fontWeight: 'bold'
                 }}>
-                    ⚠️ {error}
+                    {error}
                 </div>
             )}
             
@@ -218,10 +345,11 @@ const Rent: React.FC = () => {
                         maxHeight: '300px',
                         overflowY: 'scroll',
                         backgroundColor: '#f9f9f9',
-                        borderRadius: '5px'
+                        borderRadius: '5px',
+                        color: '#000'
                     }}>
                         <h3>KAYAK RENTAL LIABILITY WAIVER AND RELEASE</h3>
-                        <p><strong>PLEASE READ CAREFULLY BEFORE SIGNING</strong></p>
+                        <p><strong>PLEASE READ CAREFULLY BEFORE {waiverSigned ? 'CONFIRMING' : 'SIGNING'}</strong></p>
                         
                         <p>I understand that kayaking involves inherent risks including, but not limited to: drowning, injury from capsizing, collision with objects or other watercraft, exposure to weather conditions, and other water-related hazards.</p>
                         
@@ -238,15 +366,145 @@ const Rent: React.FC = () => {
                             <li>AGREE to pay for any damage to or loss of equipment.</li>
                         </ol>
                         
-                        <p><strong>I HAVE READ THIS WAIVER AND RELEASE, UNDERSTAND IT, AND SIGN IT VOLUNTARILY.</strong></p>
+                        <p><strong>I HAVE READ THIS WAIVER AND RELEASE, UNDERSTAND IT, AND {waiverSigned ? 'RE-AFFIRM' : 'SIGN'} IT VOLUNTARILY.</strong></p>
                     </div>
+
+                    {!waiverSigned && (
+                        <div style={{
+                            border: '1px solid #ccc',
+                            padding: '15px',
+                            marginBottom: '20px',
+                            borderRadius: '5px',
+                            backgroundColor: '#fff',
+                            color: '#000'
+                        }}>
+                            <div style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Date of Birth:</label>
+                                <input
+                                    type="date"
+                                    value={dateOfBirth}
+                                    onChange={(e) => setDateOfBirth(e.target.value)}
+                                    max={maxDateOfBirth}
+                                    required
+                                />
+                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
+                                    You must be at least {MINIMUM_RENTAL_AGE} years old to rent a kayak.
+                                </p>
+                                {dateOfBirth && calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE && (
+                                    <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#c62828', fontWeight: 'bold' }}>
+                                        You must be at least {MINIMUM_RENTAL_AGE} to rent. Based on this date, you are {calculateAge(dateOfBirth)}.
+                                    </p>
+                                )}
+                            </div>
+                            <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
+                                <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
+                            </p>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Signature:</label>
+                            <SignaturePad onChange={setSignatureDataUrl} />
+                        </div>
+                    )}
+
+                    {waiverSigned && (
+                        <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
+                            <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
+                        </p>
+                    )}
+
+                    {kayakQuantity > 1 && (
+                        <div style={{
+                            border: '1px solid #ccc',
+                            padding: '15px',
+                            marginBottom: '20px',
+                            borderRadius: '5px',
+                            backgroundColor: '#fff',
+                            color: '#000'
+                        }}>
+                            <h4 style={{ marginTop: 0 }}>Additional Riders ({kayakQuantity} kayaks total)</h4>
+                            <p style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>
+                                You're renting {kayakQuantity} kayaks. Besides yourself, tell us who else is joining - children must
+                                be listed by name under a parent/guardian's signature, and any other adults must sign for themselves.
+                            </p>
+
+                            <div style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
+                                    Number of children (under {MINIMUM_RENTAL_AGE}) in your group:
+                                </label>
+                                <select
+                                    value={numberOfKids}
+                                    onChange={(e) => handleNumberOfKidsChange(parseInt(e.target.value))}
+                                >
+                                    {Array.from({ length: kayakQuantity }, (_, i) => i).map(n => (
+                                        <option key={n} value={n}>{n}</option>
+                                    ))}
+                                </select>
+                                <p style={{ fontSize: '12px', color: '#666', margin: '5px 0 0 0' }}>
+                                    Additional adults: {otherAdultsCount}
+                                </p>
+                            </div>
+
+                            {numberOfKids > 0 && (
+                                <div style={{ marginBottom: '15px', paddingTop: '10px', borderTop: '1px dashed #ccc' }}>
+                                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Children</p>
+                                    {childNames.map((name, i) => (
+                                        <div key={i} style={{ marginBottom: '10px' }}>
+                                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>
+                                                Child #{i + 1} Name:
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={name}
+                                                onChange={(e) => updateChildName(i, e.target.value)}
+                                                placeholder="Full name"
+                                            />
+                                        </div>
+                                    ))}
+                                    <p style={{ fontSize: '13px', margin: '10px 0' }}>
+                                        <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
+                                    </p>
+                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
+                                        Parent/Guardian Signature (for the children listed above):
+                                    </label>
+                                    <SignaturePad onChange={setGuardianSignature} />
+                                </div>
+                            )}
+
+                            {otherAdultsCount > 0 && (
+                                <div style={{ paddingTop: '10px', borderTop: '1px dashed #ccc' }}>
+                                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Other Adults</p>
+                                    {adultRiders.map((rider, i) => (
+                                        <div key={i} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
+                                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Adult Rider #{i + 1}</p>
+                                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>Date of Birth:</label>
+                                            <input
+                                                type="date"
+                                                value={rider.dateOfBirth}
+                                                max={maxDateOfBirth}
+                                                onChange={(e) => updateAdultRider(i, 'dateOfBirth', e.target.value)}
+                                            />
+                                            {rider.dateOfBirth && calculateAge(rider.dateOfBirth) < MINIMUM_RENTAL_AGE && (
+                                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#c62828', fontWeight: 'bold' }}>
+                                                    Must be at least {MINIMUM_RENTAL_AGE} years old.
+                                                </p>
+                                            )}
+                                            <p style={{ fontSize: '13px', margin: '8px 0' }}>
+                                                <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
+                                            </p>
+                                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>Signature:</label>
+                                            <SignaturePad onChange={(val) => updateAdultRider(i, 'signature', val)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     
                     <div style={{ 
                         border: '2px solid #007bff', 
                         padding: '15px', 
                         marginBottom: '20px',
                         borderRadius: '5px',
-                        backgroundColor: '#e7f3ff'
+                        backgroundColor: '#e7f3ff',
+                        color: '#000'
                     }}>
                         <label style={{ display: 'flex', alignItems: 'flex-start', cursor: 'pointer' }}>
                             <input
@@ -256,7 +514,9 @@ const Rent: React.FC = () => {
                                 style={{ marginRight: '10px', marginTop: '3px', width: '20px', height: '20px', cursor: 'pointer' }}
                             />
                             <span style={{ fontSize: '14px', lineHeight: '1.5' }}>
-                                I have read and agree to the terms of this liability waiver. I understand the risks involved in kayaking and voluntarily assume all such risks.
+                                {waiverSigned
+                                    ? 'I confirm that I have already signed this liability waiver and I reaffirm my agreement to its terms for this rental.'
+                                    : 'I have read and agree to the terms of this liability waiver. I understand the risks involved in kayaking and voluntarily assume all such risks.'}
                             </span>
                         </label>
                     </div>
@@ -264,18 +524,27 @@ const Rent: React.FC = () => {
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <button 
                             type="button" 
-                            onClick={() => { setShowWaiver(false); setWaiverCheckbox(false); }}
+                            onClick={() => {
+                                setShowWaiver(false);
+                                setWaiverCheckbox(false);
+                                setDateOfBirth('');
+                                setSignatureDataUrl(null);
+                                setNumberOfKids(0);
+                                setChildNames([]);
+                                setGuardianSignature(null);
+                                setAdultRiders([]);
+                            }}
                             style={{ flex: 1, backgroundColor: '#666' }}
                         >
                             Cancel
                         </button>
                         <button 
                             type="button" 
-                            onClick={handleSignWaiver}
-                            disabled={!waiverCheckbox}
-                            style={{ flex: 2, opacity: waiverCheckbox ? 1 : 0.5 }}
+                            onClick={waiverSigned ? handleConfirmWaiver : handleSignWaiver}
+                            disabled={!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()}
+                            style={{ flex: 2, opacity: (!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()) ? 0.5 : 1 }}
                         >
-                            Accept and Continue
+                            {waiverSigned ? 'Confirm and Continue' : 'Sign and Continue'}
                         </button>
                     </div>
                 </div>
@@ -297,7 +566,7 @@ const Rent: React.FC = () => {
                             color: '#333',
                             textAlign: 'center'
                         }}>
-                            🚣 Number of Kayaks
+                            Number of Kayaks
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', justifyContent: 'center' }}>
                             <button
@@ -385,7 +654,7 @@ const Rent: React.FC = () => {
                             color: 'white',
                             textAlign: 'center'
                         }}>
-                            ⏱️ Select Rental Duration
+                            Select Rental Duration
                         </label>
                         <div style={{ 
                             display: 'grid', 
@@ -442,7 +711,7 @@ const Rent: React.FC = () => {
                                                 whiteSpace: 'nowrap',
                                                 boxShadow: '0 2px 8px rgba(76,175,80,0.4)'
                                             }}>
-                                                ⭐ BEST VALUE
+                                                BEST VALUE
                                             </div>
                                         )}
                                         <div style={{ 
@@ -481,7 +750,7 @@ const Rent: React.FC = () => {
                                                 display: 'inline-block',
                                                 marginTop: '5px'
                                             }}>
-                                                💰 Save {info.discount}%
+                                                Save {info.discount}%
                                             </div>
                                         )}
                                         {isSelected && (
@@ -540,7 +809,7 @@ const Rent: React.FC = () => {
                     {/* Uncomment when ready to add media files
                     <div style={{ marginTop: '50px' }}>
                         <MediaGallery 
-                            title="🎓 Quick Start Guide"
+                            title="Quick Start Guide"
                             items={[
                                 {
                                     type: 'image',

@@ -2,24 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import api from '../config/axios';
 
-const featureCards = [
-    {
-        icon: '⚡',
-        title: 'Fast sign in',
-        body: 'Sign up or log in with the same simple flow on web and mobile.',
-    },
-    {
-        icon: '✍️',
-        title: 'Waiver first',
-        body: 'Complete the liability waiver before you start renting kayaks.',
-    },
-    {
-        icon: '🛶',
-        title: 'Ready to rent',
-        body: 'Access your rentals, get passcodes, and start paddling.',
-    },
-];
-
 const flowSteps = [
     { num: '1', title: 'Rent a kayak', desc: 'Book your rental and choose your desired length.' },
     { num: '2', title: 'Unlock kayak and gear', desc: 'Press of a button - instantly unlock in the website.' },
@@ -84,21 +66,13 @@ const Home: React.FC = () => {
         }
     }, [isLoggedIn]);
 
-    // Conditional steps based on login state
-    const displayedFeatureCards = isLoggedIn ? [
-        featureCards[1], // Waiver first
-        featureCards[2], // Ready to rent
-    ] : featureCards;
-
     return (
         <div className="page-container">
             <section style={styles.heroCard}>
                 <div style={styles.heroTopRow}>
                     <div style={styles.brandBadge}>KM</div>
-                    <div style={styles.statusPill}>{isLoggedIn ? 'Waiver ready' : 'Action required'}</div>
                 </div>
 
-                <p style={styles.kicker}>Kayak Vending Machine</p>
                 <h1 style={styles.title}>
                     {isLoggedIn ? 'Your adventure awaits' : 'Rent a kayak in minutes'}
                 </h1>
@@ -124,20 +98,8 @@ const Home: React.FC = () => {
 
                 <div style={styles.heroLinks}>
                     {isLoggedIn && !waiverSigned && (
-                        <button onClick={() => history.push('/waiver')} style={styles.ghostButton}>Open waiver</button>
+                        <button onClick={() => history.push('/rent')} style={styles.ghostButton}>Sign waiver &amp; rent</button>
                     )}
-                </div>
-            </section>
-
-            <section style={styles.section}>
-                <SectionHeading 
-                    title={isLoggedIn ? "Two simple steps" : "Three simple steps"} 
-                    subtitle={isLoggedIn ? "Complete your waiver and pick your kayak." : "Get your kayak passcode in just three quick steps."} 
-                />
-                <div style={styles.cardGrid}>
-                    {displayedFeatureCards.map((card) => (
-                        <InfoCard key={card.title} {...card} />
-                    ))}
                 </div>
             </section>
 
@@ -161,7 +123,7 @@ const Home: React.FC = () => {
 
             {!isLoggedIn && (
                 <section style={styles.ctaPanel}>
-                    <h2 style={styles.ctaTitle}>Ready to get started?</h2>
+                    <h2 className="heading-backdrop" style={styles.ctaTitle}>Ready to get started?</h2>
                     <div style={styles.ctaActions}>
                         <button onClick={() => history.push('/signup')}>Sign up free</button>
                         <button onClick={() => history.push('/login')} style={styles.secondaryButton}>Log in</button>
@@ -175,19 +137,9 @@ const Home: React.FC = () => {
 function SectionHeading({ title, subtitle }: { title: string; subtitle: string }) {
     return (
         <div style={styles.sectionHeading}>
-            <h2 style={styles.sectionTitle}>{title}</h2>
+            <h2 className="heading-backdrop" style={styles.sectionTitle}>{title}</h2>
             <p style={styles.sectionSubtitle}>{subtitle}</p>
         </div>
-    );
-}
-
-function InfoCard({ icon, title, body }: { icon: string; title: string; body: string }) {
-    return (
-        <article style={styles.infoCard}>
-            <div style={styles.infoIcon}>{icon}</div>
-            <h3 style={styles.infoTitle}>{title}</h3>
-            <p style={styles.infoBody}>{body}</p>
-        </article>
     );
 }
 
@@ -229,22 +181,6 @@ const styles: Record<string, React.CSSProperties> = {
         background: '#18b7a0',
         fontWeight: 900,
         color: '#ffffff',
-    },
-    statusPill: {
-        padding: '8px 12px',
-        borderRadius: '999px',
-        background: 'rgba(24, 183, 160, 0.16)',
-        color: '#cae3ea',
-        fontWeight: 800,
-        fontSize: '0.85rem',
-    },
-    kicker: {
-        margin: 0,
-        color: '#9ed8d0',
-        textTransform: 'uppercase',
-        letterSpacing: '1.4px',
-        fontSize: '0.8rem',
-        fontWeight: 800,
     },
     title: {
         margin: '0 auto',
@@ -337,22 +273,6 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: 1.6,
         maxWidth: '55ch',
     },
-    cardGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '12px',
-    },
-    infoCard: {
-        background: '#ffffff',
-        borderRadius: '22px',
-        padding: '18px',
-        display: 'grid',
-        gap: '8px',
-        boxShadow: '0 10px 24px rgba(0,0,0,0.12)',
-    },
-    infoIcon: { fontSize: '1.8rem' },
-    infoTitle: { margin: 0, color: '#0f2c3a', fontSize: '1.1rem', fontWeight: 800 },
-    infoBody: { margin: 0, color: '#4d6470', lineHeight: 1.6 },
     stepList: { display: 'grid', gap: '12px' },
     stepCard: {
         display: 'flex',

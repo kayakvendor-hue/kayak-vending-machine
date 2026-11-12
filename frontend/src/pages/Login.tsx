@@ -21,7 +21,6 @@ const Login: React.FC = () => {
             if (response.data.success) {
                 // Store the JWT token in localStorage
                 localStorage.setItem('token', response.data.token);
-                localStorage.setItem('username', response.data.user.username);
                 localStorage.setItem('user', JSON.stringify(response.data.user));
                 localStorage.setItem('isAdmin', response.data.user.isAdmin ? 'true' : 'false');
                 
@@ -56,7 +55,7 @@ const Login: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🔐" title="Login" subtitle="Welcome back! Sign in to your account" />
+            <PageHeader title="Login" subtitle="Welcome back! Sign in to your account" />
             <div style={formContainerStyle}>
                 <form onSubmit={handleLogin}>
                     <div>
@@ -89,7 +88,7 @@ const Login: React.FC = () => {
                             fontSize: '0.9rem',
                             borderLeft: '4px solid #ff6b6b'
                         }}>
-                            ⚠️ {error}
+                            {error}
                         </p>
                     )}
                     <button 
@@ -101,7 +100,7 @@ const Login: React.FC = () => {
                             marginTop: isMobile ? '0.75rem' : '1rem',
                         }}
                     >
-                        🔓 Login
+                        Login
                     </button>
                 </form>
                 <p style={{ marginTop: '1rem', textAlign: 'center', fontSize: isMobile ? '0.9rem' : '1rem' }}>

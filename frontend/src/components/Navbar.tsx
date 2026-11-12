@@ -76,9 +76,7 @@ const Navbar: React.FC = () => {
                     alignItems: 'center',
                     padding: '1rem',
                 }}>
-                    <Link to="/" style={{ textDecoration: 'none', color: '#cae3ea', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                        🚣
-                    </Link>
+Home
                     <button
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
                         style={{
@@ -124,28 +122,28 @@ const Navbar: React.FC = () => {
                             style={linkStyle('/admin')}
                             onClick={handleLinkClick}
                         >
-                            🛠️ Admin
+                            Admin
                         </Link>
                         <Link 
                             to="/gateway" 
                             style={linkStyle('/gateway')}
                             onClick={handleLinkClick}
                         >
-                            📡 Gateway
+                            Gateway
                         </Link>
                         <Link 
                             to="/staff/unlock" 
                             style={linkStyle('/staff/unlock')}
                             onClick={handleLinkClick}
                         >
-                            🔓 Unlock
+                            Unlock
                         </Link>
                         <Link 
                             to="/staff/return" 
                             style={linkStyle('/staff/return')}
                             onClick={handleLinkClick}
                         >
-                            ↩️ Return
+                            Return
                         </Link>
                     </li>
 
@@ -159,7 +157,7 @@ const Navbar: React.FC = () => {
                     }}>
                         {!isMobile && (
                             <Link to="/" style={linkStyle('/')} onClick={handleLinkClick}>
-                                🏠 Home
+                                Home
                             </Link>
                         )}
                         {isLoggedIn && (
@@ -169,14 +167,14 @@ const Navbar: React.FC = () => {
                                     style={linkStyle('/rent')}
                                     onClick={handleLinkClick}
                                 >
-                                    🚣 Rent
+                                    Rent
                                 </Link>
                                 <Link 
                                     to="/account" 
                                     style={linkStyle('/account')}
                                     onClick={handleLinkClick}
                                 >
-                                    📋 My Rentals
+                                    My Rentals
                                 </Link>
                             </>
                         )}
@@ -221,27 +219,13 @@ const Navbar: React.FC = () => {
                 </ul>
             ) : (
                 // Regular User Navigation - Always visible, no hamburger
-                <ul style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '15px 40px',
-                    margin: 0,
-                    listStyle: 'none',
-                    gap: '1.5rem',
-                    width: '100%',
-                    maxWidth: '100%',
-                    backgroundColor: 'transparent',
-                    flexWrap: 'nowrap'
-                }}>
+                <ul className="navbar-regular">
                     {/* Left: Logo/Home */}
                     <li style={{ 
                         display: 'flex', 
                         alignItems: 'center',
                         padding: '0',
-                        minWidth: 'fit-content',
-                        flex: '0 0 auto'
+                        minWidth: 'fit-content'
                     }}>
                         <Link 
                             to="/" 
@@ -254,7 +238,7 @@ const Navbar: React.FC = () => {
                             }}
                             onClick={handleLinkClick}
                         >
-                            🚣 Kayak
+                            <span className="nav-word">Kayak</span><span className="nav-word">Vendor</span>
                         </Link>
                     </li>
 
@@ -264,7 +248,6 @@ const Navbar: React.FC = () => {
                         justifyContent: 'center',
                         alignItems: 'center',
                         gap: '1rem',
-                        flex: '1 1 auto',
                         padding: '0',
                         flexWrap: 'nowrap',
                         minWidth: 0
@@ -275,7 +258,7 @@ const Navbar: React.FC = () => {
                                 style={{...linkStyle('/account'), whiteSpace: 'nowrap'}}
                                 onClick={handleLinkClick}
                             >
-                                📋 My Rentals
+                                <span className="nav-word">My</span> <span className="nav-word">Rentals</span>
                             </Link>
                         )}
                     </li>
@@ -286,8 +269,7 @@ const Navbar: React.FC = () => {
                         justifyContent: 'flex-end',
                         alignItems: 'center',
                         padding: '0',
-                        minWidth: 'fit-content',
-                        flex: '0 0 auto'
+                        minWidth: 'fit-content'
                     }}>
                         {isLoggedIn ? (
                             <Link 

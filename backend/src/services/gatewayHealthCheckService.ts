@@ -9,9 +9,9 @@ import Kayak from '../models/kayak';
 class GatewayHealthCheckService {
     private ttlockService: TTLockService | null = null;
     private GATEWAY_ID = 2245851; // Kayak gateway
-    private TEST_LOCK_ID = 18499305; // Kayak #2 (most reliable lock)
     private healthCheckInterval: NodeJS.Timeout | null = null;
-    private isGatewayOnline = true;
+    // null = not yet checked since startup; the first check always syncs kayak flags
+    private isGatewayOnline: boolean | null = null;
     private lastCheckTime = new Date();
 
     private getTTLockService(): TTLockService {
@@ -56,69 +56,43 @@ class GatewayHealthCheckService {
     }
 
     /**
-     * Direct gateway health check by querying lock state
-     * This actually communicates with the gateway
-     * Retries 3 times - only marks offline if ALL 3 attempts fail
+     * Gateway health check using the same online rule as the admin button and rental gate
+     * (TTLockService.isGatewayOnline). Kayaks are marked unavailable when the gateway goes
+     * offline and available again when it comes back.
      */
     public async checkGatewayHealth(): Promise<boolean> {
         try {
             this.lastCheckTime = new Date();
             const ttlockService = this.getTTLockService();
 
-            const MAX_ATTEMPTS = 3;
-            let lastError: any = null;
+            const online = await ttlockService.isGatewayOnline(this.GATEWAY_ID);
 
-            // Try up to 3 times
-            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                try {
-                    console.log(`🔍 Health check attempt ${attempt}/${MAX_ATTEMPTS}: Querying lock ${this.TEST_LOCK_ID} state...`);
-                    
-                    const lockState = await ttlockService.getLockState(this.TEST_LOCK_ID);
-                    
-                    // Success on this attempt
-                    const wasOffline = !this.isGatewayOnline;
-                    this.isGatewayOnline = true;
-                    
-                    if (wasOffline) {
-                        console.log(`🟢 GATEWAY ONLINE - Lock state query succeeded on attempt ${attempt} (state: ${lockState === 0 ? 'locked' : 'unlocked'})`);
-                        await this.updateAllKayaksOnline();
-                    } else {
-                        console.log(`✅ Gateway online (attempt ${attempt}, lock state: ${lockState === 0 ? 'locked' : 'unlocked'})`);
-                    }
-                    
-                    return true;
-                } catch (error: any) {
-                    lastError = error;
-                    if (attempt < MAX_ATTEMPTS) {
-                        console.log(`   ⚠️  Attempt ${attempt} failed: ${error.message} - retrying...`);
-                    } else {
-                        console.log(`   ❌ Attempt ${attempt} failed: ${error.message}`);
-                    }
-                    // Continue to next attempt
+            if (online) {
+                const wasOnline = this.isGatewayOnline;
+                this.isGatewayOnline = true;
+                if (wasOnline !== true) {
+                    console.log('🟢 GATEWAY ONLINE');
+                    await this.updateAllKayaksOnline();
                 }
+                return true;
             }
 
-            // All 3 attempts failed
             const wasOnline = this.isGatewayOnline;
             this.isGatewayOnline = false;
-            
-            if (wasOnline) {
-                console.log(`🔴 GATEWAY OFFLINE - All 3 lock state queries failed: ${lastError?.message}`);
+            if (wasOnline !== false) {
+                console.log('🔴 GATEWAY OFFLINE');
                 await this.updateAllKayaksOffline();
-            } else {
-                console.log(`⚠️  Gateway still offline (all 3 attempts failed)`);
             }
-            
             return false;
         } catch (error: any) {
             console.error('❌ Unexpected error in health check:', error.message);
             const wasOnline = this.isGatewayOnline;
             this.isGatewayOnline = false;
-            
-            if (wasOnline) {
+
+            if (wasOnline !== false) {
                 await this.updateAllKayaksOffline();
             }
-            
+
             return false;
         }
     }
@@ -127,7 +101,7 @@ class GatewayHealthCheckService {
      * Get current gateway health status
      */
     public getHealthStatus(): {
-        isOnline: boolean;
+        isOnline: boolean | null;
         lastCheckTime: Date;
         timeSinceLastCheck: number;
     } {

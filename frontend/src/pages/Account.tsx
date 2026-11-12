@@ -23,10 +23,9 @@ const Account: React.FC = () => {
     const history = useHistory();
     const location = useLocation();
     const [rentals, setRentals] = useState<Rental[]>([]);
-    const [waiverSigned, setWaiverSigned] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const username = localStorage.getItem('username') || 'User';
+    const displayName = (JSON.parse(localStorage.getItem('user') || '{}') as { name?: string }).name || 'User';
 
     useEffect(() => {
         fetchData();
@@ -38,17 +37,6 @@ const Account: React.FC = () => {
             const rentalResponse = await api.get('/api/rental/history');
             if (rentalResponse.data.success) {
                 setRentals(rentalResponse.data.rentals);
-            }
-
-            // Fetch waiver status
-            try {
-                const waiverResponse = await api.get('/api/waiver/status');
-                if (waiverResponse.data.success) {
-                    setWaiverSigned(waiverResponse.data.waiverSigned);
-                }
-            } catch (err) {
-                // No waiver signed yet - that's okay
-                setWaiverSigned(false);
             }
 
             setLoading(false);
@@ -70,7 +58,7 @@ const Account: React.FC = () => {
     if (loading) {
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
-                <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+                
                 <h2>Loading your account...</h2>
             </div>
         );
@@ -83,7 +71,7 @@ const Account: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="👤" title="My Account" subtitle={`Welcome back, ${username}!`} />
+            <PageHeader title="My Account" subtitle={`Welcome back, ${displayName}!`} />
 
             {error && (
                 <div style={{ 
@@ -96,50 +84,23 @@ const Account: React.FC = () => {
                     textAlign: 'center',
                     fontWeight: 'bold'
                 }}>
-                    ⚠️ {error}
+                    {error}
                 </div>
             )}
-
-            {/* Waiver Status */}
-            <div style={{ 
-                backgroundColor: waiverSigned ? '#e8f5e9' : '#fff9e6', 
-                border: waiverSigned ? '2px solid #4CAF50' : '2px solid #ffc107',
-                padding: '20px', 
-                borderRadius: '12px',
-                marginBottom: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '15px'
-            }}>
-                <div style={{ fontSize: '40px' }}>
-                    {waiverSigned ? '✅' : '⚠️'}
-                </div>
-                <div>
-                    <h3 style={{ margin: '0 0 5px 0', fontSize: '1.2rem', color: 'black' }}>Waiver Status</h3>
-                    {waiverSigned ? (
-                        <p style={{ color: '#4CAF50', fontWeight: 'bold', margin: 0 }}>
-                            You're all set to rent kayaks!
-                        </p>
-                    ) : (
-                        <p style={{ color: '#f57c00', fontWeight: 'bold', margin: 0 }}>
-                            Please sign the waiver before your first rental
-                        </p>
-                    )}
-                </div>
-            </div>
 
             {/* Active Rentals Section */}
             <div style={{ marginBottom: '40px' }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
+                    justifyContent: 'center',
+                    gap: '12px',
                     marginBottom: '20px',
                     paddingBottom: '10px',
                     borderBottom: '3px solid #667eea'
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
-                        🚣 Active Rentals
+                    <h3 className="heading-backdrop" style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
+                        Active Rentals
                     </h3>
                     <div style={{
                         backgroundColor: '#667eea',
@@ -160,7 +121,7 @@ const Account: React.FC = () => {
                         textAlign: 'center',
                         color: '#666'
                     }}>
-                        <div style={{ fontSize: '64px', marginBottom: '15px' }}>🚣</div>
+                        
                         <p style={{ margin: 0, fontSize: '1.1rem' }}>
                             No active rentals. Ready to rent your first kayak?
                         </p>
@@ -168,7 +129,8 @@ const Account: React.FC = () => {
                 ) : (
                     <div style={{ 
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                        justifyContent: 'center',
                         gap: '20px'
                     }}>
                         {activeRentals.map((rental) => {
@@ -217,7 +179,7 @@ const Account: React.FC = () => {
                                             fontSize: '12px',
                                             fontWeight: 'bold'
                                         }}>
-                                            ⚠️ OVERDUE
+                                            OVERDUE
                                         </div>
                                     )}
                                     
@@ -226,16 +188,14 @@ const Account: React.FC = () => {
                                         color: '#667eea',
                                         fontSize: '1.3rem'
                                     }}>
-                                        🚣 {kayakName}
+                                        {kayakName}
                                     </h4>
                                     
                                     <div style={{ marginBottom: '15px', color: '#666' }}>
-                                        <p style={{ margin: '5px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '16px' }}>📍</span>
+                                            <p style={{ margin: '5px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <strong>Location:</strong> {kayakLocation}
                                         </p>
                                         <p style={{ margin: '5px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '16px' }}>🕐</span>
                                             <strong>Return by:</strong> {formatDate(rental.rentalEnd)}
                                         </p>
                                         {!isOverdue && hoursRemaining >= 0 && (
@@ -248,7 +208,7 @@ const Account: React.FC = () => {
                                                 fontWeight: 'bold',
                                                 textAlign: 'center'
                                             }}>
-                                                ⏰ {hoursRemaining}h {minutesRemaining}m remaining
+                                                {hoursRemaining}h {minutesRemaining}m remaining
                                             </p>
                                         )}
                                         
@@ -263,7 +223,7 @@ const Account: React.FC = () => {
                                                 textAlign: 'center',
                                                 border: '2px solid #d9534f'
                                             }}>
-                                                <p style={{margin: '0 0 5px 0'}}>⚠️ RENTAL OVERDUE</p>
+                                                <p style={{margin: '0 0 5px 0'}}>RENTAL OVERDUE</p>
                                                 <p style={{margin: 0, fontSize: '12px'}}>Late fees $10/hour charged automatically</p>
                                             </div>
                                         )}
@@ -278,7 +238,7 @@ const Account: React.FC = () => {
                                         fontSize: '13px'
                                     }}>
                                         <p style={{margin: '0 0 8px 0', fontWeight: 'bold', color: '#856404'}}>
-                                            💰 Late Return Policy
+                                            Late Return Policy
                                         </p>
                                         <ul style={{margin: 0, paddingLeft: '20px', color: '#856404'}}>
                                             <li>$10 automatically charged for each additional hour</li>
@@ -342,13 +302,14 @@ const Account: React.FC = () => {
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
+                    justifyContent: 'center',
+                    gap: '12px',
                     marginBottom: '20px',
                     paddingBottom: '10px',
                     borderBottom: '3px solid #6c757d'
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
-                        📋 Rental History
+                    <h3 className="heading-backdrop" style={{ margin: 0, fontSize: '1.5rem', color: 'white' }}>
+                        Rental History
                     </h3>
                     <div style={{
                         backgroundColor: '#6c757d',
@@ -374,7 +335,8 @@ const Account: React.FC = () => {
                 ) : (
                     <div style={{ 
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                        justifyContent: 'center',
                         gap: '15px'
                     }}>
                         {returnedRentals.map((rental) => {
@@ -412,10 +374,10 @@ const Account: React.FC = () => {
                                         </div>
                                     </div>
                                     <p style={{ margin: '5px 0', color: '#888', fontSize: '0.9rem' }}>
-                                        <strong>📍</strong> {kayakLocation}
+                                        <strong>Location:</strong> {kayakLocation}
                                     </p>
                                     <p style={{ margin: '5px 0', color: '#888', fontSize: '0.9rem' }}>
-                                        <strong>📅</strong> {formatDate(rental.rentalStart)}
+                                        <strong>Date:</strong> {formatDate(rental.rentalStart)}
                                     </p>
                                 </div>
                             );

@@ -20,6 +20,7 @@ const upload = multer({
 
 // Protected routes - require authentication
 router.get('/kayaks', authenticate, rentalController.getAvailableKayaks);
+router.get('/gateway-status', authenticate, rentalController.getGatewayStatus);
 router.post('/pre-payment-check', authenticate, rentalController.prePaymentHealthCheck);
 router.post('/rent', authenticate, rentalController.rentKayak);
 router.get('/history', authenticate, rentalController.getRentalHistory);

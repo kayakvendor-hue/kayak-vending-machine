@@ -128,7 +128,7 @@ const StaffReturn: React.FC = () => {
             )}
 
             <div className="staff-header">
-                <h2>Active Rentals - Return</h2>
+                <h2 className="heading-backdrop">Active Rentals - Return</h2>
                 <p className="subtitle">Process kayak returns with photo documentation</p>
                 <button onClick={fetchActiveRentals} className="btn btn-secondary">
                     Refresh List
@@ -153,7 +153,7 @@ const StaffReturn: React.FC = () => {
                                             fontSize: '12px',
                                             fontWeight: 'bold'
                                         }}>
-                                            ⚠️ OVERDUE
+                                            OVERDUE
                                         </span>
                                     )}
                                     {returnedKayaks.has(rental._id) && (

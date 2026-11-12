@@ -67,7 +67,7 @@ const Gateway: React.FC = () => {
             {error && <div className="error-message">{error}</div>}
 
             <div className="gateway-card">
-                <h2>G4 Gateway Status</h2>
+                <h2 className="heading-backdrop">G4 Gateway Status</h2>
                 {gateway ? (
                     <div className="gateway-info">
                         <div className="info-row">
@@ -110,7 +110,7 @@ const Gateway: React.FC = () => {
             </div>
 
             <div className="locks-card">
-                <h2>Connected Locks</h2>
+                <h2 className="heading-backdrop">Connected Locks</h2>
                 {locks.length > 0 ? (
                     <div className="locks-grid">
                         {locks.map((lock) => (

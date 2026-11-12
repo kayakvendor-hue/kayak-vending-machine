@@ -29,7 +29,7 @@ const ForgotPassword: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🔑" title="Forgot Password" subtitle="Enter your email to reset your password" />
+            <PageHeader title="Forgot Password" subtitle="Enter your email to reset your password" />
             
             {error && <p style={{ color: 'red' }}>{error}</p>}
             {message && (
@@ -42,7 +42,7 @@ const ForgotPassword: React.FC = () => {
                     textAlign: 'center'
                 }}>
                     <p style={{ color: '#667eea', fontWeight: 'bold', margin: 0 }}>
-                        ✉️ {message}
+                        {message}
                     </p>
                 </div>
             )}
@@ -91,7 +91,7 @@ const ForgotPassword: React.FC = () => {
                 fontSize: '14px'
             }}>
                 <p style={{ margin: 0, color: '#856404' }}>
-                    <strong>💡 Note:</strong> If your email is in our system, you'll receive a password reset link. 
+                    <strong>Note:</strong> If your email is in our system, you'll receive a password reset link. 
                     The link will expire in 1 hour for security.
                 </p>
             </div>

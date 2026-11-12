@@ -28,7 +28,7 @@ const Resources: React.FC = () => {
             borderBottom: '2px solid #667eea',
             paddingBottom: '10px'
           }}>
-            🎬 How to Rent a Kayak
+            How to Rent a Kayak
           </h2>
           
           {/* Video Placeholder */}
@@ -41,7 +41,7 @@ const Resources: React.FC = () => {
             border: '2px dashed #ccc'
           }}>
             <p style={{ color: '#999', fontSize: '16px', margin: 0 }}>
-              📹 Demonstration video coming soon!
+              Demonstration video coming soon!
             </p>
             <p style={{ color: '#bbb', fontSize: '14px', margin: '10px 0 0 0' }}>
               Watch a complete walkthrough of the rental process from start to finish
@@ -72,7 +72,7 @@ const Resources: React.FC = () => {
             borderBottom: '2px solid #667eea',
             paddingBottom: '10px'
           }}>
-            ❓ Troubleshooting
+            Troubleshooting
           </h2>
 
           {/* Lock Not Responding */}
@@ -93,7 +93,7 @@ const Resources: React.FC = () => {
                 transition: 'all 0.3s'
               }}
             >
-              🔒 Lock not responding?
+              Lock not responding?
               <span style={{ float: 'right' }}>
                 {expandedSection === 'lock' ? '−' : '+'}
               </span>
@@ -102,46 +102,9 @@ const Resources: React.FC = () => {
               <div style={{ padding: '15px', color: '#666', lineHeight: '1.6' }}>
                 <ul>
                   <li>Make sure you're within 10 feet of the kayak</li>
-                  <li>Try entering your 6-digit passcode manually on the keypad</li>
                   <li>Check if the lock battery is dead (icon will show on screen)</li>
                   <li>Wait 10 seconds and try again</li>
                   <li>Contact support if the lock still doesn't respond</li>
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Passcode Issues */}
-          <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
-            <button
-              onClick={() => toggleSection('passcode')}
-              style={{
-                width: '100%',
-                padding: '15px',
-                backgroundColor: expandedSection === 'passcode' ? '#e3f2fd' : '#f5f5f5',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#333',
-                textAlign: 'left',
-                transition: 'all 0.3s'
-              }}
-            >
-              🔑 Passcode not working?
-              <span style={{ float: 'right' }}>
-                {expandedSection === 'passcode' ? '−' : '+'}
-              </span>
-            </button>
-            {expandedSection === 'passcode' && (
-              <div style={{ padding: '15px', color: '#666', lineHeight: '1.6' }}>
-                <ul>
-                  <li>Double-check you're entering the correct 6-digit code</li>
-                  <li>Press ENTER after entering the passcode</li>
-                  <li>Your passcode is unique to your rental - don't share it</li>
-                  <li>Passcode automatically expires at the end of your rental time</li>
-                  <li>If it still doesn't work, tap "Unlock Now" button in the app</li>
                 </ul>
               </div>
             )}
@@ -165,7 +128,7 @@ const Resources: React.FC = () => {
                 transition: 'all 0.3s'
               }}
             >
-              🎒 Can't open the gear compartment?
+              Can't open the gear compartment?
               <span style={{ float: 'right' }}>
                 {expandedSection === 'gear' ? '−' : '+'}
               </span>
@@ -174,7 +137,6 @@ const Resources: React.FC = () => {
               <div style={{ padding: '15px', color: '#666', lineHeight: '1.6' }}>
                 <ul>
                   <li>Use the "Unlock Gear" button in the app to open the compartment</li>
-                  <li>You can also use your passcode as a backup - enter it on the gear lock</li>
                   <li>Make sure the compartment is fully clicked shut after removing gear</li>
                   <li>Don't force it - if it's stuck, contact staff immediately</li>
                 </ul>
@@ -200,7 +162,7 @@ const Resources: React.FC = () => {
                 transition: 'all 0.3s'
               }}
             >
-              ⚠️ Found damage on the kayak?
+              Found damage on the kayak?
               <span style={{ float: 'right' }}>
                 {expandedSection === 'damage' ? '−' : '+'}
               </span>
@@ -236,7 +198,7 @@ const Resources: React.FC = () => {
                 transition: 'all 0.3s'
               }}
             >
-              ⏰ What about late fees?
+              What about late fees?
               <span style={{ float: 'right' }}>
                 {expandedSection === 'late' ? '−' : '+'}
               </span>

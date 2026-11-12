@@ -322,7 +322,7 @@ export class TTLockService {
      * @param lockId - The TTLock lock ID
      * @returns Lock state: 0=locked, 1=unlocked, 2=unknown
      */
-    async getLockState(lockId: number): Promise<number> {
+    async getLockState(lockId: number, timeoutMs?: number): Promise<number> {
         await this.ensureAccessToken();
 
         try {
@@ -339,12 +339,19 @@ export class TTLockService {
 
             const response = await axios.get(
                 `${this.apiUrl}/v3/lock/queryOpenState`,
-                { params }
+                { params, timeout: timeoutMs }
             );
 
             console.log(`📥 TTLock state response:`, response.data);
 
+            if (response.data.errcode !== undefined && response.data.errcode !== 0) {
+                throw new Error(`TTLock API error ${response.data.errcode}: ${response.data.errmsg || 'unknown error'}`);
+            }
+
             const state = response.data.state;
+            if (state === undefined || state === null) {
+                throw new Error('TTLock returned no lock state');
+            }
             const stateText = state === 0 ? 'locked' : state === 1 ? 'unlocked' : 'unknown';
             console.log(`✅ Lock ${lockId} state: ${stateText} (${state})`);
             return state;
@@ -427,11 +434,40 @@ export class TTLockService {
     }
 
     /**
+     * Gateway online check used by the admin button and the rental gate.
+     * Online if the gateway reported a lock within the last 5 minutes.
+     * Stops on the first answer from TTLock; retries only when a request fails.
+     * @param gatewayId - The TTLock gateway ID
+     * @returns true if online, false if offline or TTLock could not be reached
+     */
+    async isGatewayOnline(gatewayId: number, attempts = 3, timeoutMs = 5000, delayMs = 1500): Promise<boolean> {
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                console.log(`🔍 Gateway online check - attempt ${attempt}/${attempts}...`);
+                const locks = await this.getLocksForGateway(gatewayId, timeoutMs);
+                const mostRecentUpdate = locks.length > 0
+                    ? Math.max(...locks.map((lock: any) => lock.updateDate || 0))
+                    : 0;
+                const online = mostRecentUpdate > Date.now() - 5 * 60 * 1000;
+                console.log(`✅ TTLock answered on attempt ${attempt}: gateway ${online ? 'online' : 'offline'}`);
+                return online;
+            } catch (err: any) {
+                console.log(`⚠️ Gateway online check attempt ${attempt} failed: ${err?.message}`);
+                if (attempt < attempts) {
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                }
+            }
+        }
+        console.log(`❌ Gateway online check failed after ${attempts} attempts`);
+        return false;
+    }
+
+    /**
      * Get all locks that a gateway can communicate with
      * @param gatewayId - The TTLock gateway ID
      * @returns Array of lock info objects
      */
-    async getLocksForGateway(gatewayId: number): Promise<any[]> {
+    async getLocksForGateway(gatewayId: number, timeoutMs?: number): Promise<any[]> {
         await this.ensureAccessToken();
 
         try {
@@ -444,11 +480,9 @@ export class TTLockService {
                 date: Date.now().toString()
             };
 
-            console.log(`📤 GET ${this.apiUrl}/v3/gateway/listLock`);
-
             const response = await axios.get(
                 `${this.apiUrl}/v3/gateway/listLock`,
-                { params }
+                { params, timeout: timeoutMs }
             );
 
             console.log(`📥 TTLock lock list response:`, response.data);

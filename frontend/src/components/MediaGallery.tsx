@@ -62,7 +62,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ items, title }) => {
                             color: '#999',
                             position: 'relative'
                         }}>
-                            {item.type === 'image' ? '🖼️' : '🎥'}
+                            {item.type === 'image' ? 'Image' : 'Video'}
                             <div style={{
                                 position: 'absolute',
                                 bottom: '10px',
@@ -107,7 +107,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ items, title }) => {
                                 fontStyle: 'italic',
                                 textAlign: 'center'
                             }}>
-                                📁 {item.placeholder}
+                                {item.placeholder}
                             </div>
                         </div>
                     </div>

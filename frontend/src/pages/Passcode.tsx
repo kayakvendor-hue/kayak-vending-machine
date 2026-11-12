@@ -193,7 +193,7 @@ const Passcode: React.FC = () => {
                             marginBottom: '20px',
                             border: '1px solid #f5c6cb'
                         }}>
-                            ❌ {unlockError}
+                            {unlockError}
                         </div>
                     )}
 
@@ -205,7 +205,7 @@ const Passcode: React.FC = () => {
                         borderRadius: '8px',
                         marginBottom: '20px'
                     }}>
-                        <h1 style={{ margin: 0, fontSize: '18px' }}>✅ Rental Confirmed!</h1>
+                        <h1 style={{ margin: 0, fontSize: '18px' }}>Rental Confirmed!</h1>
                     </div>
 
                     {/* Kayak Cards */}
@@ -229,7 +229,7 @@ const Passcode: React.FC = () => {
                                     fontWeight: 'bold',
                                     textAlign: 'center'
                                 }}>
-                                    ⚠️ This rental is OVERDUE - Please return immediately
+                                    This rental is OVERDUE - Please return immediately
                                 </div>
                             )}
                             {kayakRentals.length > 1 && (
@@ -239,10 +239,10 @@ const Passcode: React.FC = () => {
                             )}
                             
                             <h2 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '22px' }}>
-                                🔐 {rental.kayakName}
+                                {rental.kayakName}
                             </h2>
                             <p style={{ margin: '0 0 15px 0', color: '#666' }}>
-                                📍 {rental.kayakLocation}
+                                {rental.kayakLocation}
                             </p>
                             
                             {/* Unlock Instructions */}
@@ -260,7 +260,7 @@ const Passcode: React.FC = () => {
                                     fontWeight: 'bold',
                                     color: '#1976d2'
                                 }}>
-                                    🔓 Unlock with One Tap
+                                    Unlock with One Tap
                                 </p>
                                 <p style={{
                                     margin: '0',
@@ -280,16 +280,16 @@ const Passcode: React.FC = () => {
                                 marginBottom: '15px'
                             }}>
                                 <h4 style={{ margin: '0 0 12px 0', color: '#333', fontSize: '14px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    ℹ️ Rental Details
+                                    Rental Details
                                 </h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
                                     <div style={{ backgroundColor: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #f0f0f0' }}>
                                         <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase' }}>Location</p>
-                                        <p style={{ margin: '0', color: '#333', fontWeight: '500' }}>📍 {rental.kayakLocation}</p>
+                                        <p style={{ margin: '0', color: '#333', fontWeight: '500' }}>{rental.kayakLocation}</p>
                                     </div>
                                     <div style={{ backgroundColor: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #f0f0f0' }}>
                                         <p style={{ margin: '0 0 4px 0', color: '#999', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase' }}>Return By</p>
-                                        <p style={{ margin: '0', color: '#333', fontWeight: '500' }}>🕐 {formatReturnTime(rental.rentalEnd)}</p>
+                                        <p style={{ margin: '0', color: '#333', fontWeight: '500' }}>{formatReturnTime(rental.rentalEnd)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -303,7 +303,7 @@ const Passcode: React.FC = () => {
                                 marginBottom: '15px'
                             }}>
                                 <h4 style={{ margin: '0 0 12px 0', color: '#e65100', fontSize: '14px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    ⚠️ Important Reminders
+                                    Important Reminders
                                 </h4>
                                 <ul style={{ margin: '0', paddingLeft: '20px', color: '#666', fontSize: '13px', lineHeight: '1.6' }}>
                                     <li>Always wear your lifevest while on the water</li>
@@ -333,7 +333,7 @@ const Passcode: React.FC = () => {
                                     alignItems: 'center',
                                     gap: '8px'
                                 }}>
-                                    <span>🔑 Backup Passcodes (if button doesn't work)</span>
+                                    <span>Backup Passcodes (if button doesn't work)</span>
                                 </summary>
                                 
                                 <div style={{
@@ -414,44 +414,6 @@ const Passcode: React.FC = () => {
                         );
                     })}
 
-                    {/* Rental Summary */}
-                    <div style={{
-                        backgroundColor: '#fff',
-                        border: '2px solid #e0e0e0',
-                        borderRadius: '12px',
-                        padding: '20px',
-                        marginBottom: '30px',
-                        textAlign: 'left'
-                    }}>
-                        <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '20px' }}>
-                            📋 Rental Summary
-                        </h3>
-                        <div style={{ display: 'grid', gap: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                                <span style={{ fontWeight: 'bold', color: '#555' }}>Number of Kayaks:</span>
-                                <span style={{ color: '#667eea', fontWeight: '500' }}>{kayakRentals.length}</span>
-                            </div>
-                            {duration && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#555' }}>Duration:</span>
-                                    <span>{duration} hour{duration !== '1' ? 's' : ''}</span>
-                                </div>
-                            )}
-                            {amount && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#555' }}>Amount Paid:</span>
-                                    <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>${amount.toFixed(2)}</span>
-                                </div>
-                            )}
-                            {kayakRentals[0]?.rentalEnd && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#555' }}>Return By:</span>
-                                    <span style={{ color: '#ff9800', fontWeight: '500' }}>{formatReturnTime(kayakRentals[0].rentalEnd)}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
                     {/* Instructions */}
                     <div style={{
                         backgroundColor: '#fff9e6',
@@ -462,11 +424,11 @@ const Passcode: React.FC = () => {
                         textAlign: 'left'
                     }}>
                         <h3 style={{ margin: '0 0 15px 0', color: '#f57c00', fontSize: '18px' }}>
-                            📝 Important Instructions
+                            Important Instructions
                         </h3>
                         
                         <div style={{ marginBottom: '15px' }}>
-                            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>🚀 Before You Launch:</h4>
+                            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>Before You Launch:</h4>
                             <ol style={{ margin: 0, paddingLeft: '20px', color: '#666', lineHeight: '1.8' }}>
                                 <li>Press <strong>Unlock Kayak</strong> button to release the kayak (use passcode if needed)</li>
                                 <li>Press <strong>Unlock Gear</strong> button to open the lifevest/paddle compartment (use passcode if needed)</li>
@@ -477,7 +439,7 @@ const Passcode: React.FC = () => {
                         </div>
 
                         <div>
-                            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>🏁 When You Return:</h4>
+                            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>When You Return:</h4>
                             <ol style={{ margin: 0, paddingLeft: '20px', color: '#666', lineHeight: '1.8' }}>
                                 <li>Return kayak to the locked storage area</li>
                                 <li>Lock the lifevest/paddle compartment (use button or passcode)</li>
@@ -514,7 +476,7 @@ const Passcode: React.FC = () => {
                                 e.currentTarget.style.color = '#667eea';
                             }}
                         >
-                            📚 Need Help? View Resources & Troubleshooting
+                            Need Help? View Resources & Troubleshooting
                         </a>
                     </div>
 
@@ -528,7 +490,7 @@ const Passcode: React.FC = () => {
                         textAlign: 'left'
                     }}>
                         <h3 style={{ margin: '0 0 15px 0', color: '#c9302c', fontSize: '18px' }}>
-                            ⏰ Late Return Policy
+                            Late Return Policy
                         </h3>
                         <ul style={{ margin: 0, paddingLeft: '20px', color: '#666', lineHeight: '1.8' }}>
                             <li><strong>Late Fee:</strong> $10 automatically charged for each additional hour after your rental ends</li>
@@ -551,7 +513,7 @@ const Passcode: React.FC = () => {
                             borderRadius: '12px',
                             textAlign: 'center'
                         }}>
-                            <h3 style={{ marginTop: 0, color: '#856404' }}>📷 Report Pre-Existing Damage</h3>
+                            <h3 style={{ marginTop: 0, color: '#856404' }}>Report Pre-Existing Damage</h3>
                             <p style={{ color: '#856404', marginBottom: '15px' }}>
                                 If you notice any damage to your kayak, take a photo now to protect yourself from being charged for it.
                             </p>
@@ -571,7 +533,7 @@ const Passcode: React.FC = () => {
                                     opacity: uploadingPhoto ? 0.6 : 1
                                 }}
                             >
-                                {uploadingPhoto ? '⏳ Uploading...' : '📷 Take Damage Photo'}
+                                {uploadingPhoto ? 'Uploading...' : 'Take Damage Photo'}
                             </button>
                         </div>
                     ) : (
@@ -645,7 +607,7 @@ const Passcode: React.FC = () => {
                                             opacity: uploadingPhoto ? 0.6 : 1
                                         }}
                                     >
-                                        {uploadingPhoto ? '⏳ Submitting...' : '✓ Submit Photo'}
+                                        {uploadingPhoto ? 'Submitting...' : '✓ Submit Photo'}
                                     </button>
                                 </div>
                             )}
@@ -660,7 +622,7 @@ const Passcode: React.FC = () => {
                         marginBottom: '20px'
                     }}>
                         <p style={{ margin: 0, color: '#2e7d32', fontSize: '14px' }}>
-                            ✉️ A confirmation email with these details has been sent to your email address
+                            A confirmation email with these details has been sent to your email address
                         </p>
                     </div>
 
@@ -680,7 +642,7 @@ const Passcode: React.FC = () => {
                                 boxShadow: '0 4px 12px rgba(255,152,0,0.3)'
                             }}
                         >
-                            🔄 Return Kayak
+                            Return Kayak
                         </button>
                         <button
                             onClick={() => history.push('/account')}

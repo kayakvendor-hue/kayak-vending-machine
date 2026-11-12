@@ -2,9 +2,17 @@ import React, { useState, useEffect } from 'react';
 import api from '../config/axios';
 import PageHeader from '../components/PageHeader';
 
+interface Rider {
+    riderType: 'child' | 'adult';
+    name?: string;
+    dateOfBirth?: string;
+    signature?: string;
+    dateSigned?: string;
+}
+
 interface Rental {
     _id: string;
-    userId: { _id?: string; username: string; email: string; name?: string; phone?: string };
+    userId: { _id?: string; email: string; name?: string; phone?: string };
     kayakId: { name: string; location: string };
     rentalStart: string;
     rentalEnd: string;
@@ -14,6 +22,8 @@ interface Rental {
     pickupPhotoUrl?: string;
     returnPhotoUrl?: string;
     rentalStatus?: 'active' | 'completed' | 'cancelled';
+    additionalRiders?: Rider[];
+    guardianSignatureForMinors?: string;
 }
 
 interface Stats {
@@ -34,8 +44,26 @@ interface Kayak {
     isAvailable: boolean;
 }
 
+interface AdminUser {
+    _id: string;
+    email: string;
+    name?: string;
+    phone?: string;
+    isAdmin: boolean;
+    createdAt: string;
+    waiverSigned: boolean;
+    waiverSignedAt: string | null;
+}
+
+interface SignatureModalData {
+    userName: string;
+    signature: string;
+    dateOfBirth: string;
+    dateSigned: string;
+}
+
 const Admin: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'stats' | 'active' | 'all' | 'kayaks'>('stats');
+    const [activeTab, setActiveTab] = useState<'stats' | 'active' | 'all' | 'kayaks' | 'users'>('stats');
     const [stats, setStats] = useState<Stats | null>(null);
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,6 +88,11 @@ const Admin: React.FC = () => {
     const [editingKayakId, setEditingKayakId] = useState<string | null>(null);
     const [editKayakForm, setEditKayakForm] = useState({ name: '', location: '', description: '' });
     const [savingKayak, setSavingKayak] = useState(false);
+    const [usersList, setUsersList] = useState<AdminUser[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [loadingSignatureUserId, setLoadingSignatureUserId] = useState<string | null>(null);
+    const [signatureModalData, setSignatureModalData] = useState<SignatureModalData | null>(null);
+    const [riderModalRental, setRiderModalRental] = useState<Rental | null>(null);
 
     useEffect(() => {
         fetchStats();
@@ -72,6 +105,8 @@ const Admin: React.FC = () => {
             fetchAllRentals();
         } else if (activeTab === 'kayaks') {
             fetchKayaks();
+        } else if (activeTab === 'users') {
+            fetchUsers();
         }
     }, [activeTab]);
 
@@ -110,6 +145,36 @@ const Admin: React.FC = () => {
             setKayaksList(response.data.kayaks);
         } catch (err) {
             setError('Failed to load kayaks');
+        }
+    };
+
+    const fetchUsers = async () => {
+        setLoadingUsers(true);
+        try {
+            const response = await api.get('/api/admin/users');
+            setUsersList(response.data.users);
+        } catch (err) {
+            setError('Failed to load users');
+        } finally {
+            setLoadingUsers(false);
+        }
+    };
+
+    const handleViewSignature = async (user: AdminUser) => {
+        setLoadingSignatureUserId(user._id);
+        try {
+            const response = await api.get(`/api/admin/users/${user._id}/waiver`);
+            const waiver = response.data.waiver;
+            setSignatureModalData({
+                userName: user.name || user.email,
+                signature: waiver.signature,
+                dateOfBirth: waiver.dateOfBirth,
+                dateSigned: waiver.dateSigned
+            });
+        } catch (err) {
+            alert('No signature on file for this user.');
+        } finally {
+            setLoadingSignatureUserId(null);
         }
     };
 
@@ -330,14 +395,14 @@ const Admin: React.FC = () => {
             
             if (response.data.online) {
                 setGatewayStatus('online');
-                setGatewayMessage('✅ Gateway is responding');
+                setGatewayMessage('Gateway is responding');
             } else {
                 setGatewayStatus('offline');
-                setGatewayMessage('❌ Gateway is not responding');
+                setGatewayMessage('Gateway is not responding');
             }
         } catch (err) {
             setGatewayStatus('offline');
-            setGatewayMessage('❌ Gateway is not responding');
+            setGatewayMessage('Gateway is not responding');
         }
     };
 
@@ -348,7 +413,7 @@ const Admin: React.FC = () => {
     if (error && !stats) {
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
-                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚫</div>
+                
                 <h1 style={{ color: '#d32f2f' }}>Access Denied</h1>
                 <p style={{ 
                     color: '#f44336',
@@ -366,7 +431,7 @@ const Admin: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🛠️" title="Admin Dashboard" subtitle="Manage rentals, users, and kayaks" />
+            <PageHeader title="Admin Dashboard" subtitle="Manage rentals, users, and kayaks" />
 
             {/* Tab Navigation */}
             <div style={{ 
@@ -401,7 +466,7 @@ const Admin: React.FC = () => {
                         }
                     }}
                 >
-                    📊 Statistics
+                    Statistics
                 </button>
                 <button
                     onClick={() => setActiveTab('active')}
@@ -428,7 +493,7 @@ const Admin: React.FC = () => {
                         }
                     }}
                 >
-                    🔄 Active Rentals
+                    Active Rentals
                 </button>
                 <button
                     onClick={() => setActiveTab('all')}
@@ -455,7 +520,7 @@ const Admin: React.FC = () => {
                         }
                     }}
                 >
-                    📜 All Rentals
+                    All Rentals
                 </button>
                 <button
                     onClick={() => setActiveTab('kayaks')}
@@ -482,7 +547,34 @@ const Admin: React.FC = () => {
                         }
                     }}
                 >
-                    🚣 Manage Kayaks
+                    Manage Kayaks
+                </button>
+                <button
+                    onClick={() => setActiveTab('users')}
+                    style={{
+                        padding: '14px 28px',
+                        backgroundColor: activeTab === 'users' ? '#667eea' : 'transparent',
+                        color: activeTab === 'users' ? 'white' : '#666',
+                        border: 'none',
+                        borderBottom: activeTab === 'users' ? '4px solid #667eea' : 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '16px',
+                        borderRadius: '8px 8px 0 0',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        if (activeTab !== 'users') {
+                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                        }
+                    }}
+                    onMouseLeave={(e) => {
+                        if (activeTab !== 'users') {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                    }}
+                >
+                    Users &amp; Waivers
                 </button>
             </div>
 
@@ -584,7 +676,7 @@ const Admin: React.FC = () => {
                                         margin: 0,
                                         color: gatewayStatus === 'online' ? '#4CAF50' : gatewayStatus === 'offline' ? '#f44336' : '#FBC02D'
                                     }}>
-                                        {gatewayStatus === 'online' ? '🟢 Online' : gatewayStatus === 'offline' ? '🔴 Offline' : '🟡 Unknown'}
+                                        {gatewayStatus === 'online' ? 'Online' : gatewayStatus === 'offline' ? 'Offline' : 'Unknown'}
                                     </p>
                                     {gatewayMessage && (
                                         <p style={{ fontSize: '12px', color: '#666', margin: '8px 0 0 0' }}>
@@ -619,7 +711,7 @@ const Admin: React.FC = () => {
             {/* Active/All Rentals Tab */}
             {(activeTab === 'active' || activeTab === 'all') && (
                 <div>
-                    <h2>{activeTab === 'active' ? 'Active Rentals' : 'All Rentals'} ({rentals.length})</h2>
+                    <h2 className="heading-backdrop">{activeTab === 'active' ? 'Active Rentals' : 'All Rentals'} ({rentals.length})</h2>
                     {rentals.length === 0 ? (
                         <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>
                             No {activeTab === 'active' ? 'active' : ''} rentals found
@@ -639,6 +731,7 @@ const Admin: React.FC = () => {
                                         )}
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Photos</th>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Contact</th>
+                                        <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Family/Riders Waiver</th>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Action</th>
                                     </tr>
                                 </thead>
@@ -647,7 +740,7 @@ const Admin: React.FC = () => {
                                         <tr key={rental._id} style={{ borderBottom: '1px solid #eee' }}>
                                             <td style={{ padding: '12px' }}>
                                                 <div>
-                                                    <strong>{rental.userId?.name || rental.userId?.username}</strong>
+                                                    <strong>{rental.userId?.name || rental.userId?.email}</strong>
                                                     <br />
                                                     <small style={{ color: '#666' }}>{rental.userId?.email}</small>
                                                 </div>
@@ -696,7 +789,7 @@ const Admin: React.FC = () => {
                                                                 whiteSpace: 'nowrap'
                                                             }}
                                                         >
-                                                            📸 Pickup
+                                                            Pickup
                                                         </button>
                                                     ) : (
                                                         <span style={{ fontSize: '12px', color: '#999' }}>No pickup</span>
@@ -716,7 +809,7 @@ const Admin: React.FC = () => {
                                                                 whiteSpace: 'nowrap'
                                                             }}
                                                         >
-                                                            📸 Return
+                                                            Return
                                                         </button>
                                                     ) : activeTab === 'all' ? (
                                                         <span style={{ fontSize: '12px', color: '#999' }}>No return</span>
@@ -726,8 +819,30 @@ const Admin: React.FC = () => {
                                             <td style={{ padding: '12px' }}>
                                                 {rental.userId?.phone && (
                                                     <div style={{ fontSize: '14px', color: '#666' }}>
-                                                        📱 {rental.userId.phone}
+                                                        {rental.userId.phone}
                                                     </div>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '12px' }}>
+                                                {rental.additionalRiders && rental.additionalRiders.length > 0 ? (
+                                                    <button
+                                                        onClick={() => setRiderModalRental(rental)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            fontSize: '12px',
+                                                            fontWeight: 'bold',
+                                                            backgroundColor: '#8e24aa',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        View ({rental.additionalRiders.length})
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ fontSize: '12px', color: '#999' }}>—</span>
                                                 )}
                                             </td>
                                             <td style={{ padding: '12px' }}>
@@ -753,7 +868,7 @@ const Admin: React.FC = () => {
                                                     <button
                                                         onClick={() => {
                                                             const userId = rental.userId._id || String(rental.userId);
-                                                            const userName = rental.userId.name || rental.userId.username;
+                                                            const userName = rental.userId.name || rental.userId.email;
                                                             handleChargeDamage(userId, userName);
                                                         }}
                                                         style={{
@@ -767,7 +882,7 @@ const Admin: React.FC = () => {
                                                             fontWeight: 'bold'
                                                         }}
                                                     >
-                                                        💳 Charge Damage
+                                                        Charge Damage
                                                     </button>
                                                     {rental.returnPhotoUrl && (
                                                         <button
@@ -783,7 +898,7 @@ const Admin: React.FC = () => {
                                                                 fontWeight: 'bold'
                                                             }}
                                                         >
-                                                            ⏰ Late Fee
+                                                            Late Fee
                                                         </button>
                                                     )}
                                                 </div>
@@ -800,7 +915,7 @@ const Admin: React.FC = () => {
             {/* Manage Kayaks Tab */}
             {activeTab === 'kayaks' && (
                 <div>
-                    <h2>Manage Kayaks ({kayaksList.length})</h2>
+                    <h2 className="heading-backdrop">Manage Kayaks ({kayaksList.length})</h2>
                     {kayaksList.length === 0 ? (
                         <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>
                             No kayaks found
@@ -881,10 +996,10 @@ const Admin: React.FC = () => {
                                         ) : (
                                             <div>
                                                 <h4 style={{ margin: '0 0 10px 0', color: '#667eea', fontSize: '1.2rem' }}>
-                                                    🚣 {kayak.name}
+                                                    {kayak.name}
                                                 </h4>
                                                 <p style={{ margin: '0 0 8px 0', color: '#666' }}>
-                                                    📍 <strong>Location:</strong> {kayak.location}
+                                                    <strong>Location:</strong> {kayak.location}
                                                 </p>
                                                 <p style={{ margin: '0 0 15px 0', color: '#666', minHeight: '20px' }}>
                                                     {kayak.description || <em style={{ color: '#aaa' }}>No description set</em>}
@@ -902,13 +1017,81 @@ const Admin: React.FC = () => {
                                                         fontWeight: 'bold'
                                                     }}
                                                 >
-                                                    ✏️ Edit Details
+                                                    Edit Details
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 );
                             })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Users & Waivers Tab */}
+            {activeTab === 'users' && (
+                <div>
+                    <h2 className="heading-backdrop">Users ({usersList.length})</h2>
+                    {loadingUsers ? (
+                        <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>Loading users...</p>
+                    ) : usersList.length === 0 ? (
+                        <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>No users found</p>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f5f5f5', textAlign: 'left' }}>
+                                        <th style={{ padding: '12px' }}>Name</th>
+                                        <th style={{ padding: '12px' }}>Email</th>
+                                        <th style={{ padding: '12px' }}>Phone</th>
+                                        <th style={{ padding: '12px' }}>Joined</th>
+                                        <th style={{ padding: '12px' }}>Waiver Status</th>
+                                        <th style={{ padding: '12px' }}>Signature</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {usersList.map((user) => (
+                                        <tr key={user._id} style={{ borderBottom: '1px solid #eee' }}>
+                                            <td style={{ padding: '12px' }}>{user.name || <em style={{ color: '#aaa' }}>Not set</em>}</td>
+                                            <td style={{ padding: '12px' }}>{user.email}</td>
+                                            <td style={{ padding: '12px' }}>{user.phone || <em style={{ color: '#aaa' }}>Not set</em>}</td>
+                                            <td style={{ padding: '12px' }}>{formatDate(user.createdAt)}</td>
+                                            <td style={{ padding: '12px' }}>
+                                                {user.waiverSigned ? (
+                                                    <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                                                        Signed {user.waiverSignedAt ? `(${formatDate(user.waiverSignedAt)})` : ''}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#c62828', fontWeight: 'bold' }}>Not signed</span>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '12px' }}>
+                                                {user.waiverSigned ? (
+                                                    <button
+                                                        onClick={() => handleViewSignature(user)}
+                                                        disabled={loadingSignatureUserId === user._id}
+                                                        style={{
+                                                            padding: '6px 14px',
+                                                            fontSize: '13px',
+                                                            backgroundColor: '#667eea',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: loadingSignatureUserId === user._id ? 'not-allowed' : 'pointer',
+                                                            width: 'auto'
+                                                        }}
+                                                    >
+                                                        {loadingSignatureUserId === user._id ? 'Loading...' : 'View Signature'}
+                                                    </button>
+                                                ) : (
+                                                    <em style={{ color: '#aaa' }}>—</em>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
@@ -988,7 +1171,7 @@ const Admin: React.FC = () => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                📷 Take Photo
+                                Take Photo
                             </button>
                         )}
                         
@@ -1064,6 +1247,185 @@ const Admin: React.FC = () => {
                             borderRadius: '5px'
                         }} 
                     />
+                </div>
+            )}
+
+            {/* Signature Viewer Modal */}
+            {signatureModalData && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000
+                    }}
+                    onClick={() => setSignatureModalData(null)}
+                >
+                    <div
+                        style={{
+                            backgroundColor: 'white',
+                            padding: '25px',
+                            borderRadius: '10px',
+                            maxWidth: '500px',
+                            width: '90%',
+                            color: '#000'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ marginTop: 0 }}>Waiver Signature - {signatureModalData.userName}</h3>
+                        <p style={{ margin: '0 0 4px 0', color: '#666' }}>
+                            <strong>Date of Birth:</strong> {new Date(signatureModalData.dateOfBirth).toLocaleDateString()}
+                        </p>
+                        <p style={{ margin: '0 0 15px 0', color: '#666' }}>
+                            <strong>Signed On:</strong> {formatDate(signatureModalData.dateSigned)}
+                        </p>
+                        <img
+                            src={signatureModalData.signature}
+                            alt="User signature"
+                            style={{
+                                width: '100%',
+                                backgroundColor: '#fff',
+                                border: '1px solid #ccc',
+                                borderRadius: '5px'
+                            }}
+                        />
+                        <button
+                            onClick={() => setSignatureModalData(null)}
+                            style={{
+                                width: '100%',
+                                marginTop: '15px',
+                                padding: '10px',
+                                backgroundColor: '#666',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Family/Riders Waiver Modal */}
+            {riderModalRental && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000
+                    }}
+                    onClick={() => setRiderModalRental(null)}
+                >
+                    <div
+                        style={{
+                            backgroundColor: 'white',
+                            padding: '25px',
+                            borderRadius: '10px',
+                            maxWidth: '600px',
+                            width: '90%',
+                            maxHeight: '85vh',
+                            overflowY: 'auto',
+                            color: '#000'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ marginTop: 0 }}>
+                            Additional Riders - {riderModalRental.userId?.name || riderModalRental.userId?.email}
+                        </h3>
+
+                        {riderModalRental.additionalRiders?.some(r => r.riderType === 'child') && (
+                            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px' }}>
+                                <h4 style={{ marginTop: 0, marginBottom: '10px' }}>Children</h4>
+                                <ul style={{ margin: '0 0 15px 0', paddingLeft: '20px' }}>
+                                    {riderModalRental.additionalRiders
+                                        .filter(r => r.riderType === 'child')
+                                        .map((child, idx) => (
+                                            <li key={idx} style={{ marginBottom: '4px' }}>{child.name}</li>
+                                        ))}
+                                </ul>
+                                <p style={{ margin: '0 0 8px 0', color: '#666' }}>
+                                    <strong>Parent/Guardian Signature:</strong>
+                                </p>
+                                {riderModalRental.guardianSignatureForMinors ? (
+                                    <img
+                                        src={riderModalRental.guardianSignatureForMinors}
+                                        alt="Guardian signature"
+                                        style={{
+                                            width: '100%',
+                                            maxWidth: '400px',
+                                            backgroundColor: '#fff',
+                                            border: '1px solid #ccc',
+                                            borderRadius: '5px'
+                                        }}
+                                    />
+                                ) : (
+                                    <em style={{ color: '#c62828' }}>No guardian signature on file</em>
+                                )}
+                            </div>
+                        )}
+
+                        {riderModalRental.additionalRiders?.filter(r => r.riderType === 'adult').map((adult, idx) => (
+                            <div key={idx} style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
+                                <h4 style={{ marginTop: 0, marginBottom: '8px' }}>Additional Adult #{idx + 1}</h4>
+                                {adult.dateOfBirth && (
+                                    <p style={{ margin: '0 0 4px 0', color: '#666' }}>
+                                        <strong>Date of Birth:</strong> {new Date(adult.dateOfBirth).toLocaleDateString()}
+                                    </p>
+                                )}
+                                {adult.dateSigned && (
+                                    <p style={{ margin: '0 0 8px 0', color: '#666' }}>
+                                        <strong>Signed On:</strong> {formatDate(adult.dateSigned)}
+                                    </p>
+                                )}
+                                {adult.signature ? (
+                                    <img
+                                        src={adult.signature}
+                                        alt={`Adult rider ${idx + 1} signature`}
+                                        style={{
+                                            width: '100%',
+                                            maxWidth: '400px',
+                                            backgroundColor: '#fff',
+                                            border: '1px solid #ccc',
+                                            borderRadius: '5px'
+                                        }}
+                                    />
+                                ) : (
+                                    <em style={{ color: '#c62828' }}>No signature on file</em>
+                                )}
+                            </div>
+                        ))}
+
+                        <button
+                            onClick={() => setRiderModalRental(null)}
+                            style={{
+                                width: '100%',
+                                marginTop: '10px',
+                                padding: '10px',
+                                backgroundColor: '#666',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Close
+                        </button>
+                    </div>
                 </div>
             )}
 

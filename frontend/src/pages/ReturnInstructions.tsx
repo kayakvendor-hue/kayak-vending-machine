@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import api from '../config/axios';
 import CameraCapture from '../components/CameraCapture';
@@ -10,10 +10,75 @@ const ReturnInstructions: React.FC = () => {
     const [showCamera, setShowCamera] = useState(false);
     const [returnPhoto, setReturnPhoto] = useState<string | null>(null);
     const [isReturning, setIsReturning] = useState(false);
+    const [lockIds, setLockIds] = useState<{ kayakLockId?: number; lifevestLockId?: number }>({});
+    const [unlockingType, setUnlockingType] = useState<'kayak' | 'lifevest' | null>(null);
+    const [unlockedType, setUnlockedType] = useState<'kayak' | 'lifevest' | null>(null);
+    const [unlockError, setUnlockError] = useState<string | null>(null);
 
     // Get rentalId from URL params
     const params = new URLSearchParams(location.search);
     const rentalId = params.get('rentalId');
+
+    useEffect(() => {
+        if (!rentalId) return;
+        api.get('/api/rental/history')
+            .then(response => {
+                const rental = (response.data.rentals || []).find((r: any) => r._id === rentalId);
+                if (rental) {
+                    setLockIds({ kayakLockId: rental.kayakLockId, lifevestLockId: rental.lifevestLockId });
+                }
+            })
+            .catch(() => setUnlockError('Could not load lock information for this rental.'));
+    }, [rentalId]);
+
+    const handleUnlock = async (lockType: 'kayak' | 'lifevest') => {
+        const lockId = lockType === 'kayak' ? lockIds.kayakLockId : lockIds.lifevestLockId;
+        if (!rentalId || !lockId) return;
+
+        setUnlockingType(lockType);
+        setUnlockError(null);
+        try {
+            const response = await api.post('/api/rental/remote-unlock', { rentalId, lockId });
+            if (response.data.success) {
+                setUnlockedType(lockType);
+                setTimeout(() => setUnlockedType(null), 3000);
+            } else {
+                setUnlockError(response.data.message || 'Unlock failed. Please try again.');
+            }
+        } catch (err: any) {
+            setUnlockError(err.response?.data?.message || 'Unlock failed. Please try again.');
+        } finally {
+            setUnlockingType(null);
+        }
+    };
+
+    const renderUnlockButton = (lockType: 'kayak' | 'lifevest', label: string, color: string) => {
+        const lockId = lockType === 'kayak' ? lockIds.kayakLockId : lockIds.lifevestLockId;
+        const isLoading = unlockingType === lockType;
+        const isUnlocked = unlockedType === lockType;
+        const disabled = !lockId || isLoading;
+        return (
+            <button
+                type="button"
+                onClick={() => handleUnlock(lockType)}
+                disabled={disabled}
+                style={{
+                    padding: '12px 24px',
+                    backgroundColor: !lockId ? '#ccc' : isUnlocked ? '#4CAF50' : color,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    marginTop: '12px',
+                    opacity: isLoading ? 0.6 : 1
+                }}
+            >
+                {!lockId ? 'Not Available' : isUnlocked ? 'Unlocked' : isLoading ? 'Unlocking...' : label}
+            </button>
+        );
+    };
 
     const handlePhotoCapture = (photoData: string) => {
         setReturnPhoto(photoData);
@@ -55,7 +120,7 @@ const ReturnInstructions: React.FC = () => {
     if (!rentalId) {
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
-                <div style={{ fontSize: '48px', marginBottom: '20px' }}>❌</div>
+                
                 <h2>Error: No rental found</h2>
                 <button
                     onClick={() => history.push('/account')}
@@ -80,7 +145,7 @@ const ReturnInstructions: React.FC = () => {
     if (showCamera) {
         return (
             <div className="page-container">
-                <PageHeader icon="📸" title="Capture Return Photo" subtitle="Take a clear photo of your kayak" />
+                <PageHeader title="Capture Return Photo" subtitle="Take a clear photo of your kayak" />
                 <CameraCapture 
                     onCapture={handlePhotoCapture}
                     onCancel={handleCancelCamera}
@@ -92,7 +157,7 @@ const ReturnInstructions: React.FC = () => {
     if (returnPhoto) {
         return (
             <div className="page-container">
-                <PageHeader icon="✅" title="Return Summary" subtitle="Confirm and complete your rental return" />
+                <PageHeader title="Return Summary" subtitle="Confirm and complete your rental return" />
 
                 <div style={{
                     backgroundColor: '#e8f5e9',
@@ -144,7 +209,7 @@ const ReturnInstructions: React.FC = () => {
                             e.currentTarget.style.backgroundColor = '#999';
                         }}
                     >
-                        📷 Retake Photo
+                        Retake Photo
                     </button>
                     <button
                         onClick={handleConfirmReturn}
@@ -172,7 +237,7 @@ const ReturnInstructions: React.FC = () => {
                             }
                         }}
                     >
-                        {isReturning ? '⏳ Completing...' : '✓ Complete Return'}
+                        {isReturning ? 'Completing...' : '✓ Complete Return'}
                     </button>
                 </div>
             </div>
@@ -181,7 +246,7 @@ const ReturnInstructions: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🛶" title="Return Your Kayak" subtitle="Follow these steps to complete your rental return" />
+            <PageHeader title="Return Your Kayak" subtitle="Follow these steps to complete your rental return" />
 
             {/* Step 1: Lock Kayak */}
             <div style={{
@@ -196,13 +261,6 @@ const ReturnInstructions: React.FC = () => {
                     alignItems: 'flex-start',
                     gap: '16px'
                 }}>
-                    <div style={{
-                        fontSize: '48px',
-                        minWidth: '60px',
-                        textAlign: 'center'
-                    }}>
-                        🔐
-                    </div>
                     <div style={{ flex: 1 }}>
                         <h2 style={{ margin: '0 0 12px 0', color: '#667eea', fontSize: '1.4rem' }}>
                             Step 1: Secure Your Kayak
@@ -213,7 +271,7 @@ const ReturnInstructions: React.FC = () => {
                             color: '#333',
                             lineHeight: '1.6'
                         }}>
-                            Lock your kayak in the <strong>designated return spot</strong> using the lock code provided in your email.
+                            Lock your kayak in the <strong>designated return spot</strong>.
                         </p>
                         <ul style={{
                             margin: '8px 0',
@@ -226,6 +284,7 @@ const ReturnInstructions: React.FC = () => {
                             <li>Leave the kayak in a safe, visible location</li>
                             <li>Do not leave personal items in the kayak</li>
                         </ul>
+                        {renderUnlockButton('kayak', 'Unlock Kayak', '#667eea')}
                     </div>
                 </div>
             </div>
@@ -243,13 +302,6 @@ const ReturnInstructions: React.FC = () => {
                     alignItems: 'flex-start',
                     gap: '16px'
                 }}>
-                    <div style={{
-                        fontSize: '48px',
-                        minWidth: '60px',
-                        textAlign: 'center'
-                    }}>
-                        ⛑️
-                    </div>
                     <div style={{ flex: 1 }}>
                         <h2 style={{ margin: '0 0 12px 0', color: '#f57c00', fontSize: '1.4rem' }}>
                             Step 2: Return Equipment
@@ -260,7 +312,7 @@ const ReturnInstructions: React.FC = () => {
                             color: '#333',
                             lineHeight: '1.6'
                         }}>
-                            Return all gear to the <strong>storage box</strong> using the code provided.
+                            Return all gear to the <strong>storage box</strong>.
                         </p>
                         <ul style={{
                             margin: '8px 0',
@@ -274,9 +326,23 @@ const ReturnInstructions: React.FC = () => {
                             <li>Ensure all items are placed properly inside</li>
                             <li>Lock the storage box when done</li>
                         </ul>
+                        {renderUnlockButton('lifevest', 'Unlock Gear', '#f57c00')}
                     </div>
                 </div>
             </div>
+
+            {unlockError && (
+                <div style={{
+                    backgroundColor: '#ffebee',
+                    border: '2px solid #c62828',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    color: '#c62828',
+                    marginBottom: '20px'
+                }}>
+                    {unlockError}
+                </div>
+            )}
 
             {/* Step 3: Take Photo */}
             <div style={{
@@ -291,13 +357,6 @@ const ReturnInstructions: React.FC = () => {
                     alignItems: 'flex-start',
                     gap: '16px'
                 }}>
-                    <div style={{
-                        fontSize: '48px',
-                        minWidth: '60px',
-                        textAlign: 'center'
-                    }}>
-                        📸
-                    </div>
                     <div style={{ flex: 1 }}>
                         <h2 style={{ margin: '0 0 12px 0', color: '#2e7d32', fontSize: '1.4rem' }}>
                             Step 3: Take Confirmation Photo
@@ -367,7 +426,7 @@ const ReturnInstructions: React.FC = () => {
                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(76,175,80,0.3)';
                     }}
                 >
-                    📸 Take Return Photo
+                    Take Return Photo
                 </button>
             </div>
 

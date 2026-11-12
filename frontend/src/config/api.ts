@@ -18,8 +18,8 @@ const API_BASE_URL = process.env.REACT_APP_API_URL ||
     ? 'https://web-production-ca964.up.railway.app'
     : getDevBackendUrl());
 
-console.log('🔗 API Base URL:', API_BASE_URL);
-console.log('📱 Frontend Hostname:', window.location.hostname);
-console.log('🌍 Full URL:', window.location.href);
+console.log('API Base URL:', API_BASE_URL);
+console.log('Frontend Hostname:', window.location.hostname);
+console.log('Full URL:', window.location.href);
 
 export default API_BASE_URL;

@@ -97,7 +97,7 @@ const ResetPassword: React.FC = () => {
 
     return (
         <div className="page-container">
-            <PageHeader icon="🔐" title="Reset Password" subtitle={userEmail ? `Resetting password for: ${userEmail}` : 'Create a new password'} />
+            <PageHeader title="Reset Password" subtitle={userEmail ? `Resetting password for: ${userEmail}` : 'Create a new password'} />
             
             {error && <p style={{ color: 'red' }}>{error}</p>}
             {message && (
@@ -110,7 +110,7 @@ const ResetPassword: React.FC = () => {
                     textAlign: 'center'
                 }}>
                     <p style={{ color: '#4CAF50', fontWeight: 'bold', margin: '0 0 10px 0' }}>
-                        ✓ {message}
+                        {message}
                     </p>
                     <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
                         Redirecting to login page...
@@ -161,7 +161,7 @@ const ResetPassword: React.FC = () => {
                 fontSize: '14px'
             }}>
                 <p style={{ margin: 0, color: '#856404' }}>
-                    <strong>🔒 Security Tip:</strong> Choose a strong password that you don't use for other accounts.
+                    <strong>Security Tip:</strong> Choose a strong password that you don't use for other accounts.
                 </p>
             </div>
         </div>

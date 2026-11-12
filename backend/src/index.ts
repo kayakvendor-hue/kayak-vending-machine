@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { processLateReturnCharges } from './services/lateFeeService';
 import Lock from './models/lock';
 import TTLockService from './services/ttlockService';
+import gatewayHealthCheckService from './services/gatewayHealthCheckService';
 import { PasscodeQueueService } from './services/passcodeQueueService';
 import { apiLimiter } from './middleware/rateLimiter';
 
@@ -165,12 +166,12 @@ async function startServer() {
         });
         console.log('✅ Passcode cleanup scheduler started (runs daily at 2 AM)');
 
-        // Health checks now happen on-demand when user clicks "Continue to Payment"
-        // See: POST /api/rentals/pre-payment-check
+        // Rentals also re-check the gateway on demand: POST /api/rentals/pre-payment-check
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ Server is running on http://0.0.0.0:${PORT}`);
             console.log(`📱 Access from phone at: http://YOUR_PC_IP:${PORT}`);
+            gatewayHealthCheckService.startHealthCheck();
         });
     } catch (err: any) {
         console.error('Database connection error:');

@@ -98,10 +98,10 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
   return (
     <div className="remote-unlock-panel">
       <div className="unlock-header">
-        <h3>🔓 {kayakName}</h3>
+        <h3>{kayakName}</h3>
         {timeRemaining && (
           <div className="time-remaining">
-            ⏱️ {timeRemaining}
+            {timeRemaining}
           </div>
         )}
       </div>
@@ -109,7 +109,7 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
       {/* Error Display */}
       {error && (
         <div className="error-message">
-          <span>❌ {error}</span>
+          <span>{error}</span>
         </div>
       )}
 
@@ -124,7 +124,7 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
           fontSize: '14px',
           textAlign: 'center'
         }}>
-          ⚠️ Locks not yet configured. Use passcode below.
+          Locks not yet configured. Use passcode below.
         </div>
       )}
 
@@ -149,7 +149,7 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
             transition: 'all 0.3s'
           }}
         >
-          {!kayakLockId ? '⚠️ Not Ready' : unlockedLocks.has('kayak') ? '✅ Kayak Unlocked' : loadingLocks.has('kayak') ? '⏳ Unlocking...' : '🔓 Unlock Kayak'}
+          {!kayakLockId ? 'Not Ready' : unlockedLocks.has('kayak') ? 'Kayak Unlocked' : loadingLocks.has('kayak') ? 'Unlocking...' : 'Unlock Kayak'}
         </button>
 
         {/* Lifevest/Paddle Lock Button */}
@@ -171,7 +171,7 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
             transition: 'all 0.3s'
           }}
         >
-          {!lifevestLockId ? '⚠️ Not Ready' : unlockedLocks.has('lifevest') ? '✅ Gear Unlocked' : loadingLocks.has('lifevest') ? '⏳ Unlocking...' : '🔓 Unlock Gear'}
+          {!lifevestLockId ? 'Not Ready' : unlockedLocks.has('lifevest') ? 'Gear Unlocked' : loadingLocks.has('lifevest') ? 'Unlocking...' : 'Unlock Gear'}
         </button>
       </div>
     </div>

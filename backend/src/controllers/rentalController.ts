@@ -10,6 +10,7 @@ import smsService from '../services/smsService';
 import paymentService from '../services/paymentService';
 import { uploadImage } from '../utils/imageUpload';
 import { getUserWaiverState } from '../utils/waiverStatus';
+import { MINIMUM_RENTAL_AGE, validateDateOfBirth, validateWaiverSignature, isAtLeastMinimumRentalAge } from '../utils/validators';
 import { safeError } from '../utils/errorResponse';
 
 // Tiered pricing structure with discounts
@@ -39,6 +40,7 @@ class RentalController {
         this.getLockStatus = this.getLockStatus.bind(this);
         this.getLockBattery = this.getLockBattery.bind(this);
         this.diagnosticCheckLock = this.diagnosticCheckLock.bind(this);
+        this.getGatewayStatus = this.getGatewayStatus.bind(this);
     }
 
     private getTTLockService(): TTLockService {
@@ -67,6 +69,11 @@ class RentalController {
         } catch (error) {
             res.status(500).json({ message: 'Error fetching kayaks', error });
         }
+    }
+
+    public async getGatewayStatus(req: AuthRequest, res: Response): Promise<void> {
+        const online = await this.getTTLockService().isGatewayOnline(2245851);
+        res.status(200).json({ success: true, online });
     }
 
     /**
@@ -109,35 +116,15 @@ class RentalController {
                 return;
             }
 
-            // Now do the actual gateway health check - try 3 times
+            // Same gateway online check as the admin Test Now button
             const ttlockService = this.getTTLockService();
-            const TEST_LOCK_ID = 18499305; // Kayak #2 (most reliable)
-            const MAX_ATTEMPTS = 3;
-            let gatewayHealthy = false;
+            const GATEWAY_ID = 2245851; // Kayak G4 gateway ID from TTLock
+            const gatewayOnline = await ttlockService.isGatewayOnline(GATEWAY_ID);
 
-            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                try {
-                    console.log(`   📡 Gateway test attempt ${attempt}/${MAX_ATTEMPTS}...`);
-                    
-                    // Try to query lock state - requires gateway to respond
-                    await ttlockService.getLockState(TEST_LOCK_ID);
-                    
-                    gatewayHealthy = true;
-                    console.log(`   ✅ Gateway responded successfully on attempt ${attempt}`);
-                    break;
-                } catch (error: any) {
-                    if (attempt < MAX_ATTEMPTS) {
-                        console.log(`   ⚠️  Attempt ${attempt} failed, retrying...`);
-                    } else {
-                        console.log(`   ❌ All 3 attempts failed: ${error.message}`);
-                    }
-                }
-            }
-
-            if (!gatewayHealthy) {
+            if (!gatewayOnline) {
                 res.status(503).json({ 
                     success: false, 
-                    message: 'Gateway is currently offline. Unable to proceed with rental. Please try again in a few moments.',
+                    message: 'Gateway is currently offline. Unable to proceed with rental. Please try again later.',
                     retryable: true
                 });
                 return;
@@ -173,7 +160,7 @@ class RentalController {
 
     public async rentKayak(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId; // From auth middleware
-        const { kayakId, kayakQuantity, rentalDuration, paymentIntentId, pickupPhoto } = req.body;
+        const { kayakId, kayakQuantity, rentalDuration, paymentIntentId, pickupPhoto, waiverConfirmedAt, additionalRiders, guardianSignatureForMinors } = req.body;
 
         try {
             // Check if user has a current waiver on file
@@ -188,11 +175,86 @@ class RentalController {
             if (!waiverState.signed) {
                 res.status(403).json({ 
                     success: false, 
-                    message: waiverState.signedAt ? 'Please renew your liability waiver before renting' : 'Please sign the liability waiver before renting',
+                    message: 'Please sign the liability waiver before renting',
                     requiresWaiver: true
                 });
                 return;
             }
+
+            // Defense-in-depth: signWaiver already blocks under-18 signers, but this
+            // re-checks age against the stored date of birth in case of older records.
+            if (!waiverState.isAdult) {
+                res.status(403).json({
+                    success: false,
+                    message: `You must be at least ${MINIMUM_RENTAL_AGE} years old to rent a kayak.`
+                });
+                return;
+            }
+
+            // waiverConfirmedAt is sent by the frontend once the renter re-confirms the
+            // waiver checkbox for this rental; parsed/stamped server-side for the audit trail.
+            const parsedWaiverConfirmedAt = waiverConfirmedAt && !isNaN(new Date(waiverConfirmedAt).getTime())
+                ? new Date(waiverConfirmedAt)
+                : new Date();
+
+            // Handle a single requested kayak or fall back to the next available one
+            const quantity = kayakQuantity || 1;
+
+            // For multi-kayak rentals, anyone besides the account holder must be accounted
+            // for: children (name only, covered by the guardian's signature) or adults
+            // (their own signature + date of birth, since they're responsible for themselves).
+            const ridersInput = Array.isArray(additionalRiders) ? additionalRiders : [];
+            let hasChildRider = false;
+
+            if (quantity > 1) {
+                if (ridersInput.length !== quantity - 1) {
+                    res.status(400).json({
+                        success: false,
+                        message: `Please provide rider details for all ${quantity - 1} additional kayak(s).`
+                    });
+                    return;
+                }
+
+                for (let i = 0; i < ridersInput.length; i++) {
+                    const rider = ridersInput[i];
+                    if (rider?.riderType === 'child') {
+                        hasChildRider = true;
+                        if (!rider.name || !String(rider.name).trim()) {
+                            res.status(400).json({ success: false, message: `Please enter a name for child rider #${i + 1}.` });
+                            return;
+                        }
+                    } else if (rider?.riderType === 'adult') {
+                        if (!rider.dateOfBirth || !validateDateOfBirth(rider.dateOfBirth)) {
+                            res.status(400).json({ success: false, message: `Please provide a valid date of birth for adult rider #${i + 1}.` });
+                            return;
+                        }
+                        if (!isAtLeastMinimumRentalAge(rider.dateOfBirth)) {
+                            res.status(403).json({ success: false, message: `Adult rider #${i + 1} must be at least ${MINIMUM_RENTAL_AGE} years old to rent a kayak.` });
+                            return;
+                        }
+                        if (!rider.signature || !validateWaiverSignature(rider.signature)) {
+                            res.status(400).json({ success: false, message: `Please provide a signature for adult rider #${i + 1}.` });
+                            return;
+                        }
+                    } else {
+                        res.status(400).json({ success: false, message: `Invalid rider type for rider #${i + 1}.` });
+                        return;
+                    }
+                }
+
+                if (hasChildRider && (!guardianSignatureForMinors || !validateWaiverSignature(guardianSignatureForMinors))) {
+                    res.status(400).json({ success: false, message: 'A parent/guardian signature is required for the child rider(s) listed.' });
+                    return;
+                }
+            }
+
+            const ridersToStore = ridersInput.map((rider: any) => ({
+                riderType: rider.riderType,
+                name: rider.riderType === 'child' ? String(rider.name).trim() : undefined,
+                dateOfBirth: rider.riderType === 'adult' ? new Date(rider.dateOfBirth) : undefined,
+                signature: rider.riderType === 'adult' ? rider.signature : undefined,
+                dateSigned: new Date()
+            }));
 
             // Verify payment was successful (optional for now - payment flow is placeholder)
             let paymentIntent = null;
@@ -211,8 +273,6 @@ class RentalController {
                 console.log('⏭️  Skipping payment verification (placeholder mode)');
             }
 
-            // Handle a single requested kayak or fall back to the next available one
-            const quantity = kayakQuantity || 1;
             const rentals = [];
 
             let availableKayaks;
@@ -324,7 +384,10 @@ class RentalController {
                     lifevestLockId: lifevestLock?.lockId || undefined,
                     paymentIntentId,
                     paymentStatus: 'succeeded',
-                    pickupPhotoUrl 
+                    pickupPhotoUrl,
+                    waiverConfirmedAt: parsedWaiverConfirmedAt,
+                    additionalRiders: ridersToStore.length > 0 ? ridersToStore : undefined,
+                    guardianSignatureForMinors: hasChildRider ? guardianSignatureForMinors : undefined
                 });
 
                 // Update lock status if locks are assigned
@@ -378,7 +441,7 @@ class RentalController {
                 // Send notifications in the background - don't block the response on slow email/SMS providers
                 emailService.sendRentalConfirmation(
                     user.email,
-                    user.name || user.username || 'User',
+                    user.name || 'User',
                     kayakNames,
                     rentalEnd,
                     amount,
@@ -420,7 +483,7 @@ class RentalController {
                     { rentalStatus: { $ne: 'completed' } }
                 ]
             })
-                .populate('userId', 'username email name phone')
+                .populate('userId', 'email name phone')
                 .populate('kayakId')
                 .sort({ rentalEnd: 1 });
             
@@ -565,7 +628,7 @@ class RentalController {
                 // Send notifications in the background - don't block the response on slow email/SMS providers
                 emailService.sendReturnConfirmation(
                     user.email,
-                    user.name || user.username || 'User',
+                    user.name || 'User',
                     kayak.name
                 ).catch(err => console.error('Error sending return confirmation email:', err));
 

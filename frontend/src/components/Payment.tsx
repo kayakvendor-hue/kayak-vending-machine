@@ -37,7 +37,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
             
             // Create a timeout promise - if health check takes more than 15 seconds, treat as offline
             const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Health check timeout')), 15000);
+                setTimeout(() => reject(new Error('Health check timeout')), 20000);
             });
             
             const healthCheckPromise = api.post('/api/rental/pre-payment-check', {
@@ -57,15 +57,15 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
             let errorMessage = 'Gateway is currently offline. Unable to complete rental at this time.';
             
             if (err.message === 'Health check timeout') {
-                errorMessage = '🌐 Gateway Offline - No response from server. Check your internet connection or try again later.';
+                errorMessage = 'Gateway Offline - No response from server. Check your internet connection or try again later.';
             } else if (err.response?.status === 503) {
-                errorMessage = '🌐 Gateway Offline - The rental system is currently unavailable. Please try again in a few moments.';
+                errorMessage = 'Gateway Offline - The rental system is currently unavailable. Please try again later.';
             } else if (err.response?.status === 400) {
                 errorMessage = err.response?.data?.message || 'Some kayaks are no longer available. Please go back and select again.';
             } else if (err.code === 'ECONNABORTED') {
-                errorMessage = '🌐 Gateway Offline - Connection timeout. The rental system is not responding.';
+                errorMessage = 'Gateway Offline - Connection timeout. The rental system is not responding.';
             } else if (err.message?.toLowerCase().includes('network')) {
-                errorMessage = '🌐 Gateway Offline - Network error. Please check your connection.';
+                errorMessage = 'Gateway Offline - Network error. Please check your connection.';
             } else if (err.response?.data?.message) {
                 errorMessage = err.response.data.message;
             }
@@ -184,7 +184,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
             }
 
             if (paymentIntent?.status === 'succeeded') {
-                console.log('✅ Payment successful! Customer can be charged for future fees.');
+                console.log('Payment successful! Customer can be charged for future fees.');
                 
                 try {
                     await onSuccess(paymentIntentId);
@@ -252,9 +252,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
                     maxWidth: '400px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
                 }}>
-                    <div style={{ fontSize: '48px', marginBottom: '20px', animation: 'spin 1s linear infinite' }}>
-                        🔄
-                    </div>
+                    <div style={{ fontSize: '48px', marginBottom: '20px', animation: 'spin 1s linear infinite' }}></div>
                     <h3 style={{ color: '#667eea', marginBottom: '10px' }}>Verifying Gateway...</h3>
                     <p style={{ color: '#666', margin: '10px 0' }}>
                         Please wait while we verify the gateway is online.
@@ -287,7 +285,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
                     alignItems: 'center',
                     gap: '10px'
                 }}>
-                    <div style={{ fontSize: '20px', animation: 'spin 1s linear infinite' }}>🔄</div>
+                    <div style={{ fontSize: '20px', animation: 'spin 1s linear infinite' }}></div>
                     <div>
                         <p style={{ color: '#f57f17', fontWeight: 'bold', margin: '0 0 3px 0' }}>
                             Gateway check in progress...
@@ -315,7 +313,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
                     marginBottom: '20px'
                 }}>
                     <p style={{ color: '#2e7d32', fontWeight: 'bold', margin: 0 }}>
-                        ✅ Gateway is online and ready!
+                        Gateway is online and ready!
                     </p>
                 </div>
             )}
@@ -330,7 +328,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
                     marginBottom: '20px'
                 }}>
                     <p style={{ color: '#c62828', fontWeight: 'bold', margin: '0 0 5px 0' }}>
-                        ⚠️ Gateway Offline
+                        Gateway Offline
                     </p>
                     <p style={{ color: '#d32f2f', fontSize: '13px', margin: 0 }}>
                         {healthCheckError}
@@ -359,7 +357,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ amount, kayakId, kayakIds, re
                     borderRadius: '4px',
                     border: '1px solid #f44336'
                 }}>
-                    ⚠️ {error}
+                    {error}
                 </p>
             )}
 
