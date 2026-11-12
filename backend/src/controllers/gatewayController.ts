@@ -33,32 +33,16 @@ class GatewayController {
             // Hardcoded gateway ID for now - can be made dynamic later
             const gatewayId = 2245851; // Kayak G4 gateway ID from TTLock
             
-            // Get locks connected to this gateway
+            // Gateway status comes from TTLock's gateway flag (same rule as the rental gate)
             const ttlockService = this.getTTLockService();
             const locks = await ttlockService.getLocksForGateway(gatewayId);
+            const online = await ttlockService.isGatewayOnline(gatewayId);
 
-            // Determine gateway status based on lock update timestamps
-            // If gateway is online, it should be reporting lock status updates frequently
-            let gatewayStatus = 'offline';
-            let lastHeartbeat = new Date(0); // Very old date
-            
-            if (locks.length > 0) {
-                // Find the most recent updateDate from all locks
-                const mostRecentUpdate = Math.max(
-                    ...locks.map((lock: any) => lock.updateDate || 0)
-                );
-                lastHeartbeat = new Date(mostRecentUpdate);
-                
-                // If most recent update is within the last 5 minutes, gateway is online
-                const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-                gatewayStatus = mostRecentUpdate > fiveMinutesAgo ? 'online' : 'offline';
-                
-                console.log(`🌐 Gateway ${gatewayId} last heartbeat: ${lastHeartbeat.toISOString()}`);
-                console.log(`   Status: ${gatewayStatus}`);
-            } else {
-                console.log(`⚠️  Gateway ${gatewayId} has no locks - cannot determine status`);
-                gatewayStatus = 'unknown';
-            }
+            const mostRecentUpdate = locks.length > 0
+                ? Math.max(...locks.map((lock: any) => lock.updateDate || 0))
+                : 0;
+            const lastHeartbeat = new Date(mostRecentUpdate);
+            const gatewayStatus = online ? 'online' : 'offline';
 
             const gateway = {
                 deviceId: gatewayId,

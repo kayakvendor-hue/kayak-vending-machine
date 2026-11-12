@@ -63,8 +63,8 @@ class RentalController {
 
     public async getAvailableKayaks(req: AuthRequest, res: Response): Promise<void> {
         try {
-            // Only return kayaks that are available AND have lock signal
-            const kayaks = await Kayak.find({ isAvailable: true, lockOnline: true }).sort({ createdAt: 1 });
+            // Only return kayaks that are available (gateway status is checked at rental time)
+            const kayaks = await Kayak.find({ isAvailable: true }).sort({ createdAt: 1 });
             res.status(200).json(kayaks);
         } catch (error) {
             res.status(500).json({ message: 'Error fetching kayaks', error });
@@ -130,18 +130,7 @@ class RentalController {
                 return;
             }
 
-            // Check that all kayaks still have lock signal
-            const offlineKayaks = kayaks.filter((k: any) => !k.lockOnline);
-            if (offlineKayaks.length > 0) {
-                res.status(400).json({ 
-                    success: false, 
-                    message: `${offlineKayaks.map((k: any) => k.name).join(', ')} lost signal. Please select different kayaks.`,
-                    retryable: false
-                });
-                return;
-            }
-
-            console.log(`🟢 Pre-payment check PASSED - gateway healthy and kayaks available\n`);
+            console.log(`🟢 Pre-payment check PASSED - gateway online and kayaks available\n`);
 
             res.status(200).json({ 
                 success: true, 
@@ -290,20 +279,9 @@ class RentalController {
                     return;
                 }
 
-                // Check if lock is online (gateway connected)
-                if (!requestedKayak.lockOnline) {
-                    res.status(400).json({ 
-                        success: false, 
-                        message: `That kayak is unavailable - ${requestedKayak.lockStatusReason === 'gateway-offline' ? 'Gateway is offline' : 'Lock has no signal'}. Please try again shortly.`,
-                        lockStatus: requestedKayak.lockStatusReason
-                    });
-                    return;
-                }
-
                 availableKayaks = [requestedKayak];
             } else {
-                // Get available kayaks that also have lock signal
-                availableKayaks = await Kayak.find({ isAvailable: true, lockOnline: true }).limit(quantity);
+                availableKayaks = await Kayak.find({ isAvailable: true }).limit(quantity);
 
                 if (availableKayaks.length < quantity) {
                     res.status(400).json({ 
@@ -336,14 +314,13 @@ class RentalController {
 
             // Create rental for each kayak
             for (const kayak of availableKayaks) {
-                // Double-check lock is still online before creating rental
+                // Make sure the kayak is still available before creating its rental
                 const currentKayakStatus = await Kayak.findById(kayak._id);
-                if (!currentKayakStatus?.lockOnline) {
-                    console.warn(`⚠️ Kayak ${kayak.name} lock went offline during rental creation`);
+                if (!currentKayakStatus?.isAvailable) {
+                    console.warn(`⚠️ Kayak ${kayak.name} was rented during checkout`);
                     res.status(400).json({
                         success: false,
-                        message: `${kayak.name} lock lost signal during checkout. Please select another kayak or try again.`,
-                        lockStatus: currentKayakStatus?.lockStatusReason
+                        message: `${kayak.name} was just rented. Please select another kayak or try again.`
                     });
                     return;
                 }

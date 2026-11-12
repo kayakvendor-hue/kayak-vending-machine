@@ -434,21 +434,17 @@ export class TTLockService {
     }
 
     /**
-     * Gateway online check used by the admin button and the rental gate.
-     * Online if the gateway reported a lock within the last 5 minutes.
-     * Stops on the first answer from TTLock; retries only when a request fails.
+     * Gateway online check used by the admin button, the rental gate, and the health service.
+     * Uses TTLock's own gateway status (isOnline === 1) from /v3/gateway/detail.
+     * Retries only when the request fails; a successful answer is final.
      * @param gatewayId - The TTLock gateway ID
-     * @returns true if online, false if offline or TTLock could not be reached
+     * @returns true if TTLock reports the gateway online, false if offline or TTLock could not be reached
      */
     async isGatewayOnline(gatewayId: number, attempts = 3, timeoutMs = 5000, delayMs = 1500): Promise<boolean> {
         for (let attempt = 1; attempt <= attempts; attempt++) {
             try {
                 console.log(`🔍 Gateway online check - attempt ${attempt}/${attempts}...`);
-                const locks = await this.getLocksForGateway(gatewayId, timeoutMs);
-                const mostRecentUpdate = locks.length > 0
-                    ? Math.max(...locks.map((lock: any) => lock.updateDate || 0))
-                    : 0;
-                const online = mostRecentUpdate > Date.now() - 5 * 60 * 1000;
+                const online = await this.getGatewayOnlineFlag(gatewayId, timeoutMs);
                 console.log(`✅ TTLock answered on attempt ${attempt}: gateway ${online ? 'online' : 'offline'}`);
                 return online;
             } catch (err: any) {
@@ -461,6 +457,34 @@ export class TTLockService {
         console.log(`❌ Gateway online check failed after ${attempts} attempts`);
         return false;
     }
+
+    /**
+     * Read TTLock's isOnline flag for a gateway
+     * @param gatewayId - The TTLock gateway ID
+     * @param timeoutMs - Request timeout
+     * @returns true if TTLock reports the gateway as online
+     */
+    async getGatewayOnlineFlag(gatewayId: number, timeoutMs?: number): Promise<boolean> {
+        await this.ensureAccessToken();
+
+        const params = {
+            clientId: this.clientId,
+            accessToken: this.accessToken!,
+            gatewayId: gatewayId.toString(),
+            date: Date.now().toString()
+        };
+
+        const response = await axios.get(
+            `${this.apiUrl}/v3/gateway/detail`,
+            { params, timeout: timeoutMs }
+        );
+
+        if (response.data?.errcode) {
+            throw new Error(`TTLock error ${response.data.errcode}: ${response.data.errmsg || 'unknown'}`);
+        }
+        return response.data?.isOnline === 1;
+    }
+
 
     /**
      * Get all locks that a gateway can communicate with
