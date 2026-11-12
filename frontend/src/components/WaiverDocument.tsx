@@ -98,6 +98,8 @@ const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renterBlock, guardianBl
             <strong>I HAVE READ THIS AGREEMENT AND FULLY UNDERSTAND IT. I UNDERSTAND THAT BY SIGNING IT I AM GIVING UP MY RIGHT TO SUE THE RELEASEES FOR INJURY OR DEATH, INCLUDING INJURY OR DEATH CAUSED BY THEIR NEGLIGENCE, THAT I AM RESPONSIBLE FOR ANY DAMAGE, LOSS, OR THEFT OF THE RENTED EQUIPMENT, AND I SIGN IT VOLUNTARILY.</strong>
         </p>
 
+        <p style={paragraphStyle}>I have read this Agreement and I agree to its terms. I have watched the Company's safety video.</p>
+
         {renterBlock && (
             <div style={{ borderTop: '1px solid #ddd', marginTop: '14px', paddingTop: '14px' }}>
                 <p style={headingStyle}>Renter</p>
