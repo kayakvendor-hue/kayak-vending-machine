@@ -121,15 +121,9 @@ const Home: React.FC = () => {
                 </div>
             </section>
 
-            {!isLoggedIn && (
-                <section style={styles.ctaPanel}>
-                    <h2 className="heading-backdrop" style={styles.ctaTitle}>Ready to get started?</h2>
-                    <div style={styles.ctaActions}>
-                        <button onClick={() => history.push('/signup')}>Sign up free</button>
-                        <button onClick={() => history.push('/login')} style={styles.secondaryButton}>Log in</button>
-                    </div>
-                </section>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '32px 0' }}>
+                <button onClick={() => history.push('/rent')}>Rent now</button>
+            </div>
         </div>
     );
 };
