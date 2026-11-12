@@ -14,6 +14,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
     const hasDrawnRef = useRef(false);
     const lastPointRef = useRef<{ x: number; y: number } | null>(null);
     const [isEmpty, setIsEmpty] = useState(true);
+    const [submitted, setSubmitted] = useState(false);
 
     // Size the canvas's backing store for the device pixel ratio so lines stay crisp,
     // while keeping the CSS size responsive to the container width.
@@ -24,8 +25,21 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
         const resize = () => {
             const ratio = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * ratio;
-            canvas.height = height * ratio;
+            // Hidden after submit (display: none); keep the last size until shown again.
+            if (rect.width === 0) return;
+            const newWidth = Math.round(rect.width * ratio);
+            const newHeight = Math.round(height * ratio);
+            // Mobile browsers fire resize while scrolling (address bar show/hide).
+            // Setting canvas.width clears the drawing, so only resize when the size really changed.
+            if (canvas.width === newWidth && canvas.height === newHeight) return;
+
+            const snapshot = document.createElement('canvas');
+            snapshot.width = canvas.width;
+            snapshot.height = canvas.height;
+            snapshot.getContext('2d')?.drawImage(canvas, 0, 0);
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
             const ctx = canvas.getContext('2d');
             if (ctx) {
                 ctx.scale(ratio, ratio);
@@ -33,6 +47,9 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = '#000';
+                if (hasDrawnRef.current && snapshot.width > 0) {
+                    ctx.drawImage(snapshot, 0, 0, snapshot.width / ratio, snapshot.height / ratio);
+                }
             }
         };
 
@@ -84,7 +101,6 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
         lastPointRef.current = null;
         if (hasDrawnRef.current) {
             setIsEmpty(false);
-            onChange(canvasRef.current?.toDataURL('image/png') || null);
         }
     };
 
@@ -99,6 +115,19 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
         onChange(null);
     };
 
+    // Sends the signature to the parent and hides the drawing box.
+    const handleSubmit = () => {
+        const canvas = canvasRef.current;
+        if (!canvas || isEmpty) return;
+        onChange(canvas.toDataURL('image/png'));
+        setSubmitted(true);
+    };
+
+    const handleSignAgain = () => {
+        handleClear();
+        setSubmitted(false);
+    };
+
     return (
         <div>
             <canvas
@@ -106,7 +135,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
                 style={{
                     width: '100%',
                     height: `${height}px`,
-                    display: 'block',
+                    display: submitted ? 'none' : 'block',
                     backgroundColor: '#fff',
                     border: '2px dashed #aaa',
                     borderRadius: '6px',
@@ -121,20 +150,51 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                <span style={{ fontSize: '12px', color: '#666' }}>
-                    {isEmpty ? 'Sign above using your mouse or finger' : 'Signature captured'}
-                </span>
-                <button
-                    type="button"
-                    onClick={handleClear}
-                    style={{ padding: '4px 10px', fontSize: '12px', backgroundColor: '#666', width: 'auto' }}
-                >
-                    Clear
-                </button>
-            </div>
+            {submitted ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                    <span style={{ fontSize: '12px', color: '#2e7d32', fontWeight: 600 }}>Signature submitted</span>
+                    <button
+                        type="button"
+                        onClick={handleSignAgain}
+                        style={{ padding: '4px 10px', fontSize: '12px', backgroundColor: '#666', width: 'auto' }}
+                    >
+                        Sign again
+                    </button>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>
+                        {isEmpty ? 'Sign above using your mouse or finger' : 'Looks good? Press Submit to confirm'}
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            type="button"
+                            onClick={handleClear}
+                            style={{ padding: '4px 10px', fontSize: '12px', backgroundColor: '#666', width: 'auto' }}
+                        >
+                            Clear
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={isEmpty}
+                            style={{
+                                padding: '4px 10px',
+                                fontSize: '12px',
+                                backgroundColor: '#2e7d32',
+                                width: 'auto',
+                                opacity: isEmpty ? 0.5 : 1,
+                                cursor: isEmpty ? 'not-allowed' : 'pointer'
+                            }}
+                        >
+                            Submit
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
+
 };
 
 export default SignaturePad;
