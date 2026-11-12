@@ -28,6 +28,11 @@ const Rent: React.FC = () => {
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [waiverConfirmedAt, setWaiverConfirmedAt] = useState<string | null>(null);
+
+    // Waiver and payment steps are shown on this same URL, so scroll to the top of each step.
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [showWaiver, showPayment]);
     const [numberOfKids, setNumberOfKids] = useState(0);
     const [childNames, setChildNames] = useState<string[]>([]);
     const [guardianSignature, setGuardianSignature] = useState<string | null>(null);
