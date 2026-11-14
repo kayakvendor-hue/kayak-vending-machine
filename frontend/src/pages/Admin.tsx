@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../config/axios';
+import { saveFile } from '../utils/saveFile';
 import PageHeader from '../components/PageHeader';
 
 interface Rider {
@@ -180,12 +181,7 @@ const Admin: React.FC = () => {
     const handleDownloadWaiverPdf = async (url: string, filename: string) => {
         try {
             const response = await api.get(url, { responseType: 'blob' });
-            const objectUrl = URL.createObjectURL(response.data);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(objectUrl);
+            saveFile(response.data, filename);
         } catch (err) {
             alert('Could not generate the waiver PDF.');
         }

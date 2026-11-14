@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import api from '../config/axios';
+import { saveFile } from '../utils/saveFile';
 import RemoteUnlockPanel from '../components/RemoteUnlock/RemoteUnlockPanel';
 import PageHeader from '../components/PageHeader';
 
@@ -87,12 +88,7 @@ const Account: React.FC = () => {
     const handleDownloadPdf = async (url: string, filename: string) => {
         try {
             const response = await api.get(url, { responseType: 'blob' });
-            const objectUrl = URL.createObjectURL(response.data);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(objectUrl);
+            saveFile(response.data, filename);
         } catch (err) {
             alert('Could not download the waiver PDF.');
         }

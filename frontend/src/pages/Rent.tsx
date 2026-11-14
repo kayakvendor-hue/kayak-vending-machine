@@ -397,7 +397,7 @@ const Rent: React.FC = () => {
             setShowPayment(false);
             
             // Send the user to My Rentals, where the unlock buttons are
-            setTimeout(() => history.push('/rentals'), 100);
+            setTimeout(() => history.push('/account'), 100);
         } catch (err) {
             console.error('Rental creation failed:', err);
             // Check if it's a network error vs actual failure
@@ -405,7 +405,7 @@ const Rent: React.FC = () => {
                 const error = err as any;
                 if (error.response?.status === 201 || error.response?.status === 200) {
                     // Success response, just navigate to rentals
-                    setTimeout(() => history.push('/rentals'), 100);
+                    setTimeout(() => history.push('/account'), 100);
                     return;
                 }
             }

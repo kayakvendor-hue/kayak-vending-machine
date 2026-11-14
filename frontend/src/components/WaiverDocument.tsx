@@ -150,7 +150,10 @@ const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renter, onRenterChange,
         color: '#000',
         fontSize: '14px',
         lineHeight: '1.5',
-        textAlign: 'left'
+        textAlign: 'left',
+        maxHeight: '60vh',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch'
     }}>
         <h3 style={{ textAlign: 'center', margin: '0 0 12px 0' }}>WAIVER, RELEASE OF LIABILITY AND RENTAL AGREEMENT</h3>
         <p style={paragraphStyle}><strong>PLEASE READ CAREFULLY BEFORE SIGNING. THIS IS A RELEASE OF LIABILITY AND A PROMISE NOT TO SUE. IT ALSO MAKES ME RESPONSIBLE FOR THE RENTED EQUIPMENT.</strong></p>
