@@ -96,10 +96,6 @@ class EmailService {
                         .details { background: white; border-left: 4px solid #18b7a0; padding: 15px; margin: 20px 0; }
                         .detail-row { display: flex; justify-content: space-between; margin: 10px 0; }
                         .label { font-weight: bold; color: #18b7a0; }
-                        .passcode-section { margin: 20px 0; }
-                        .passcode-label { font-size: 14px; font-weight: bold; color: #18b7a0; text-transform: uppercase; margin-bottom: 8px; }
-                        .passcode { font-size: 28px; font-weight: bold; color: #18b7a0; letter-spacing: 4px; background: #f0f0f0; padding: 15px; border-radius: 8px; text-align: center; margin: 10px 0 5px 0; font-family: monospace; }
-                        .passcode-description { text-align: center; color: #666; font-size: 12px; margin: 5px 0 15px 0; }
                         .instructions { background: #fffbea; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
                         .instructions h3 { color: #f57c00; margin-top: 0; }
                         .instructions ol { padding-left: 20px; }
@@ -150,7 +146,7 @@ class EmailService {
                             </div>
 
                             <div class="warning">
-                                <strong>⏰ Important:</strong> Your passcodes will automatically expire at the end of your rental period. <strong>Late returns are charged $10 per hour.</strong>
+                                <strong>⏰ Important:</strong> <strong>Late returns are charged $10 per hour.</strong>
                             </div>
 
                             <p style="color: #666; font-size: 14px; margin-top: 20px;">

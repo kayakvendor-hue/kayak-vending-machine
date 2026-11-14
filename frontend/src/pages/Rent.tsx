@@ -5,7 +5,18 @@ import Payment from '../components/Payment';
 import CameraCapture from '../components/CameraCapture';
 import PageHeader from '../components/PageHeader';
 import MediaGallery from '../components/MediaGallery';
+import SafetyVideoGate from '../components/SafetyVideoGate';
 import SignaturePad from '../components/SignaturePad';
+import { FillIn, GuardianFields, RenterFields, SignatureField } from '../components/WaiverDocument';
+
+// An adult rider on a multi-kayak rental: their own details, date of birth, and signature.
+type AdultRider = RenterFields & { dateOfBirth: string; signature: string | null };
+
+const emptyAdultRider = (): AdultRider => ({
+    dateOfBirth: '', signature: null,
+    fullName: '', address: '', phone: '', email: '',
+    emergencyName: '', emergencyRelationship: '', emergencyPhone: ''
+});
 import WaiverDocument from '../components/WaiverDocument';
 
 interface Kayak {
@@ -26,6 +37,9 @@ const Rent: React.FC = () => {
     const [waiverSigned, setWaiverSigned] = useState(false);
     const [showWaiver, setShowWaiver] = useState(false);
     const [waiverCheckbox, setWaiverCheckbox] = useState(false);
+    const [agreementRead, setAgreementRead] = useState(false);
+    const [safetyVideoWatched, setSafetyVideoWatched] = useState(false);
+    const [needsSafetyVideo, setNeedsSafetyVideo] = useState(false);
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [waiverConfirmedAt, setWaiverConfirmedAt] = useState<string | null>(null);
@@ -37,7 +51,23 @@ const Rent: React.FC = () => {
     const [numberOfKids, setNumberOfKids] = useState(0);
     const [childNames, setChildNames] = useState<string[]>([]);
     const [guardianSignature, setGuardianSignature] = useState<string | null>(null);
-    const [adultRiders, setAdultRiders] = useState<{ dateOfBirth: string; signature: string | null }[]>([]);
+    const [guardian, setGuardian] = useState<GuardianFields>({ fullName: '', relationship: '', phone: '' });
+    const [guardianAgreed, setGuardianAgreed] = useState(false);
+    const [childDobs, setChildDobs] = useState<string[]>([]);
+    const [renter, setRenter] = useState(() => {
+        // Signup and login store the account in localStorage; use it to prefill the renter's name and email.
+        let account: { name?: string; email?: string } = {};
+        try {
+            account = JSON.parse(localStorage.getItem('user') || '{}');
+        } catch {
+            account = {};
+        }
+        return {
+            fullName: account.name || '', address: '', phone: '', email: account.email || '',
+            emergencyName: '', emergencyRelationship: '', emergencyPhone: ''
+        };
+    });
+    const [adultRiders, setAdultRiders] = useState<AdultRider[]>([]);
     const [assignedKayaks, setAssignedKayaks] = useState<any[]>([]);
     const history = useHistory();
 
@@ -82,10 +112,15 @@ const Rent: React.FC = () => {
             while (next.length < n) next.push('');
             return next;
         });
+        setChildDobs(prev => {
+            const next = prev.slice(0, n);
+            while (next.length < n) next.push('');
+            return next;
+        });
         const newAdultCount = Math.max(0, kayakQuantity - 1 - n);
         setAdultRiders(prev => {
             const next = prev.slice(0, newAdultCount);
-            while (next.length < newAdultCount) next.push({ dateOfBirth: '', signature: null });
+            while (next.length < newAdultCount) next.push(emptyAdultRider());
             return next;
         });
     };
@@ -94,8 +129,33 @@ const Rent: React.FC = () => {
         setChildNames(prev => prev.map((name, i) => (i === index ? value : name)));
     };
 
-    const updateAdultRider = (index: number, field: 'dateOfBirth' | 'signature', value: string | null) => {
-        setAdultRiders(prev => prev.map((rider, i) => (i === index ? { ...rider, [field]: value } : rider)));
+    const updateChildDob = (index: number, value: string) => {
+        setChildDobs(prev => prev.map((dob, i) => (i === index ? value : dob)));
+    };
+
+    const updateRenter = (field: keyof typeof renter, value: string) => {
+        setRenter(prev => ({ ...prev, [field]: value }));
+    };
+
+    // Returns an error message if the renter's fill-in fields aren't complete, else null.
+    const validateRenterDetails = (): string | null => {
+        const required: [string, string][] = [
+            [renter.fullName, 'Full name'],
+            [renter.address, 'Address'],
+            [renter.phone, 'Phone'],
+            [renter.email, 'Email'],
+            [renter.emergencyName, 'Emergency contact name'],
+            [renter.emergencyRelationship, 'Emergency contact relationship'],
+            [renter.emergencyPhone, 'Emergency contact phone'],
+        ];
+        for (const [value, label] of required) {
+            if (!value.trim()) return `Please enter your ${label.toLowerCase()}`;
+        }
+        return null;
+    };
+
+    const updateAdultRider = (index: number, field: keyof AdultRider, value: string | null) => {
+        setAdultRiders(prev => prev.map((rider, i) => (i === index ? { ...rider, [field]: value } as AdultRider : rider)));
     };
 
     // Returns an error message if the additional-rider details aren't complete/valid, else null.
@@ -103,15 +163,24 @@ const Rent: React.FC = () => {
         if (kayakQuantity <= 1) return null;
         for (let i = 0; i < childNames.length; i++) {
             if (!childNames[i].trim()) return `Please enter a name for child #${i + 1}`;
+            if (!childDobs[i]) return `Please enter a date of birth for child #${i + 1}`;
+            if (calculateAge(childDobs[i]) >= MINIMUM_RENTAL_AGE) return `Child #${i + 1} must be under ${MINIMUM_RENTAL_AGE}. Adults must be listed as adult riders.`;
         }
         if (numberOfKids > 0 && !guardianSignature) {
             return 'Please collect a parent/guardian signature for the children listed';
         }
+        if (numberOfKids > 0 && (!guardianAgreed || !guardian.fullName.trim() || !guardian.relationship.trim() || !guardian.phone.trim())) {
+            return 'Please complete the parent/guardian section for the children listed';
+        }
         for (let i = 0; i < adultRiders.length; i++) {
             const rider = adultRiders[i];
-            if (!rider.dateOfBirth) return `Please enter a date of birth for adult rider #${i + 1}`;
-            if (calculateAge(rider.dateOfBirth) < MINIMUM_RENTAL_AGE) return `Adult rider #${i + 1} must be at least ${MINIMUM_RENTAL_AGE} years old`;
-            if (!rider.signature) return `Please collect a signature for adult rider #${i + 1}`;
+            if (!rider.dateOfBirth) return `Please enter a date of birth for adult rider #${i + 2}`;
+            if (calculateAge(rider.dateOfBirth) < MINIMUM_RENTAL_AGE) return `Adult rider #${i + 2} must be at least ${MINIMUM_RENTAL_AGE} years old`;
+            if (!rider.signature) return `Please collect a signature for adult rider #${i + 2}`;
+            if (!rider.fullName.trim() || !rider.address.trim() || !rider.phone.trim() || !rider.email.trim() ||
+                !rider.emergencyName.trim() || !rider.emergencyRelationship.trim() || !rider.emergencyPhone.trim()) {
+                return `Please complete all contact details for adult rider #${i + 2}`;
+            }
         }
         return null;
     };
@@ -133,6 +202,13 @@ const Rent: React.FC = () => {
                         setWaiverSigned(waiverResponse.data.waiverSigned);
                     } catch (err) {
                         // Ignore waiver check error if not logged in
+                    }
+
+                    try {
+                        const profileResponse = await api.get('/api/auth/profile');
+                        setNeedsSafetyVideo(!profileResponse.data.user.safetyVideoWatchedAt);
+                    } catch (err) {
+                        // If the profile can't load, the backend still blocks rentals without the video
                     }
                 }
                 
@@ -187,12 +263,17 @@ const Rent: React.FC = () => {
         // checkbox re-confirmation. Also reset the additional-rider section
         // (children/other adults) sized to this rental's kayak quantity.
         setWaiverCheckbox(false);
+        setAgreementRead(false);
+        setSafetyVideoWatched(false);
         setDateOfBirth('');
         setSignatureDataUrl(null);
         setNumberOfKids(0);
         setChildNames([]);
+        setChildDobs([]);
         setGuardianSignature(null);
-        setAdultRiders(Array.from({ length: Math.max(0, kayakQuantity - 1) }, () => ({ dateOfBirth: '', signature: null })));
+        setGuardian({ fullName: '', relationship: '', phone: '' });
+        setGuardianAgreed(false);
+        setAdultRiders(Array.from({ length: Math.max(0, kayakQuantity - 1) }, () => emptyAdultRider()));
         setShowWaiver(true);
         setError('');
     };
@@ -237,9 +318,24 @@ const Rent: React.FC = () => {
             setError(ridersError);
             return;
         }
+        const renterError = validateRenterDetails();
+        if (renterError) {
+            setError(renterError);
+            return;
+        }
 
         try {
-            await api.post('/api/waiver/sign', { signature: signatureDataUrl, dateOfBirth });
+            await api.post('/api/waiver/sign', { signature: signatureDataUrl, dateOfBirth, renter: {
+                fullName: renter.fullName.trim(),
+                address: renter.address.trim(),
+                phone: renter.phone.trim(),
+                email: renter.email.trim(),
+                emergencyContact: {
+                    name: renter.emergencyName.trim(),
+                    relationship: renter.emergencyRelationship.trim(),
+                    phone: renter.emergencyPhone.trim(),
+                },
+            } });
             setWaiverSigned(true);
             proceedToPayment(new Date().toISOString());
         } catch (err: any) {
@@ -266,8 +362,23 @@ const Rent: React.FC = () => {
             console.log('Payment successful, creating rental...');
             // Build the additional-rider roster (children + other adults) collected during the waiver step
             const additionalRidersPayload = kayakQuantity > 1 ? [
-                ...childNames.map(name => ({ riderType: 'child', name })),
-                ...adultRiders.map(r => ({ riderType: 'adult', dateOfBirth: r.dateOfBirth, signature: r.signature }))
+                ...childNames.map((name, i) => ({ riderType: 'child', name, dateOfBirth: childDobs[i] })),
+                ...adultRiders.map(r => ({
+                    riderType: 'adult',
+                    dateOfBirth: r.dateOfBirth,
+                    signature: r.signature,
+                    renter: {
+                        fullName: r.fullName.trim(),
+                        address: r.address.trim(),
+                        phone: r.phone.trim(),
+                        email: r.email.trim(),
+                        emergencyContact: {
+                            name: r.emergencyName.trim(),
+                            relationship: r.emergencyRelationship.trim(),
+                            phone: r.emergencyPhone.trim()
+                        }
+                    }
+                }))
             ] : [];
 
             // Complete the rental immediately after payment
@@ -277,21 +388,16 @@ const Rent: React.FC = () => {
                 paymentIntentId: paymentId,
                 waiverConfirmedAt,
                 additionalRiders: additionalRidersPayload,
-                guardianSignatureForMinors: numberOfKids > 0 ? guardianSignature : undefined
+                guardianSignatureForMinors: numberOfKids > 0 ? guardianSignature : undefined,
+                guardianDetails: numberOfKids > 0 ? { ...guardian, fullName: guardian.fullName.trim(), relationship: guardian.relationship.trim(), phone: guardian.phone.trim() } : undefined
             });
             
             console.log('Rental created successfully:', response.data);
             setAssignedKayaks(response.data.rentals);
             setShowPayment(false);
             
-            // Navigate to passcode page with multiple kayak info
-            setTimeout(() => {
-                history.push('/passcode', { 
-                    rentals: response.data.rentals,
-                    duration: rentalDuration,
-                    amount: rentalAmount
-                });
-            }, 100);
+            // Send the user to My Rentals, where the unlock buttons are
+            setTimeout(() => history.push('/rentals'), 100);
         } catch (err) {
             console.error('Rental creation failed:', err);
             // Check if it's a network error vs actual failure
@@ -322,6 +428,15 @@ const Rent: React.FC = () => {
         );
     }
 
+    if (needsSafetyVideo) {
+        return (
+            <div className="page-container">
+                <PageHeader title="Rent a Kayak" subtitle="One quick video before your first rental" />
+                <SafetyVideoGate onWatched={() => setNeedsSafetyVideo(false)} />
+            </div>
+        );
+    }
+
     return (
         <div className="page-container">
             <PageHeader title="Rent a Kayak" subtitle="Choose your kayaks and rental duration" />
@@ -344,42 +459,32 @@ const Rent: React.FC = () => {
             {showWaiver ? (
                 <div style={{ maxWidth: '600px', margin: '0 auto' }}>
                     <h2>Liability Waiver</h2>
-                    <WaiverDocument />
-
-                    {!waiverSigned && (
-                        <div style={{
-                            border: '1px solid #ccc',
-                            padding: '15px',
-                            marginBottom: '20px',
-                            borderRadius: '5px',
-                            backgroundColor: '#fff',
-                            color: '#000'
-                        }}>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Date of Birth:</label>
-                                <input
-                                    type="date"
-                                    value={dateOfBirth}
-                                    onChange={(e) => setDateOfBirth(e.target.value)}
-                                    max={maxDateOfBirth}
-                                    required
-                                />
-                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
-                                    You must be at least {MINIMUM_RENTAL_AGE} years old to rent a kayak.
-                                </p>
-                                {dateOfBirth && calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE && (
-                                    <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#c62828', fontWeight: 'bold' }}>
-                                        You must be at least {MINIMUM_RENTAL_AGE} to rent. Based on this date, you are {calculateAge(dateOfBirth)}.
-                                    </p>
-                                )}
-                            </div>
-                            <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
-                                <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
+                    <WaiverDocument
+                        renter={!waiverSigned ? renter : undefined}
+                        onRenterChange={!waiverSigned ? updateRenter : undefined}
+                        dateOfBirth={dateOfBirth}
+                        onDateOfBirthChange={!waiverSigned ? setDateOfBirth : undefined}
+                        maxDateOfBirth={maxDateOfBirth}
+                        dateOfBirthError={dateOfBirth && calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE ? (
+                            <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#c62828', fontWeight: 'bold' }}>
+                                You must be at least {MINIMUM_RENTAL_AGE} to rent. Based on this date, you are {calculateAge(dateOfBirth)}.
                             </p>
-                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Signature:</label>
-                            <SignaturePad onChange={setSignatureDataUrl} />
-                        </div>
-                    )}
+                        ) : null}
+                        agreementChecked={agreementRead}
+                        onAgreementChange={!waiverSigned ? setAgreementRead : undefined}
+                        safetyVideoChecked={safetyVideoWatched}
+                        onSafetyVideoChange={!waiverSigned ? setSafetyVideoWatched : undefined}
+                        minors={numberOfKids > 0 ? childNames.map((name, i) => ({ name, dateOfBirth: childDobs[i] || '' })) : undefined}
+                        onMinorChange={(i, field, value) => (field === 'name' ? updateChildName(i, value) : updateChildDob(i, value))}
+                        guardianSignature={guardianSignature}
+                        onGuardianSignatureChange={setGuardianSignature}
+                        guardian={guardian}
+                        onGuardianChange={(field, value) => setGuardian(prev => ({ ...prev, [field]: value }))}
+                        guardianAgreed={guardianAgreed}
+                        onGuardianAgreedChange={setGuardianAgreed}
+                        renterSignature={!waiverSigned ? signatureDataUrl : undefined}
+                        onRenterSignatureChange={!waiverSigned ? setSignatureDataUrl : undefined}
+                    />
 
                     {waiverSigned && (
                         <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
@@ -419,38 +524,16 @@ const Rent: React.FC = () => {
                                 </p>
                             </div>
 
-                            {numberOfKids > 0 && (
-                                <div style={{ marginBottom: '15px', paddingTop: '10px', borderTop: '1px dashed #ccc' }}>
-                                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Children</p>
-                                    {childNames.map((name, i) => (
-                                        <div key={i} style={{ marginBottom: '10px' }}>
-                                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>
-                                                Child #{i + 1} Name:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={name}
-                                                onChange={(e) => updateChildName(i, e.target.value)}
-                                                placeholder="Full name"
-                                            />
-                                        </div>
-                                    ))}
-                                    <p style={{ fontSize: '13px', margin: '10px 0' }}>
-                                        <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
-                                    </p>
-                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>
-                                        Parent/Guardian Signature (for the children listed above):
-                                    </label>
-                                    <SignaturePad onChange={setGuardianSignature} />
-                                </div>
-                            )}
-
                             {otherAdultsCount > 0 && (
                                 <div style={{ paddingTop: '10px', borderTop: '1px dashed #ccc' }}>
                                     <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Other Adults</p>
                                     {adultRiders.map((rider, i) => (
                                         <div key={i} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
-                                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Adult Rider #{i + 1}</p>
+                                            <p style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>Adult Rider #{i + 2}</p>
+                                            <FillIn label="Full Name:" value={rider.fullName} onChange={(v) => updateAdultRider(i, 'fullName', v)} />
+                                            <FillIn label="Address:" value={rider.address} onChange={(v) => updateAdultRider(i, 'address', v)} />
+                                            <FillIn label="Phone:" value={rider.phone} onChange={(v) => updateAdultRider(i, 'phone', v)} type="tel" />
+                                            <FillIn label="Email:" value={rider.email} onChange={(v) => updateAdultRider(i, 'email', v)} type="email" />
                                             <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>Date of Birth:</label>
                                             <input
                                                 type="date"
@@ -463,11 +546,17 @@ const Rent: React.FC = () => {
                                                     Must be at least {MINIMUM_RENTAL_AGE} years old.
                                                 </p>
                                             )}
-                                            <p style={{ fontSize: '13px', margin: '8px 0' }}>
+                                            <p style={{ fontWeight: 'bold', margin: '8px 0 0 0', fontSize: '13px' }}>Emergency Contact:</p>
+                                            <div style={{ paddingLeft: '16px' }}>
+                                                <FillIn label="Name:" value={rider.emergencyName} onChange={(v) => updateAdultRider(i, 'emergencyName', v)} />
+                                                <FillIn label="Relationship:" value={rider.emergencyRelationship} onChange={(v) => updateAdultRider(i, 'emergencyRelationship', v)} />
+                                                <FillIn label="Phone:" value={rider.emergencyPhone} onChange={(v) => updateAdultRider(i, 'emergencyPhone', v)} type="tel" />
+                                            </div>
+                                            <p style={{ margin: '10px 0 4px 0', fontWeight: 'bold' }}>Signature:</p>
+                                            <SignatureField value={rider.signature} onChange={(val) => updateAdultRider(i, 'signature', val)} />
+                                            <p style={{ margin: '10px 0 0 0' }}>
                                                 <strong>Today's Date:</strong> {new Date().toLocaleDateString()}
                                             </p>
-                                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '3px' }}>Signature:</label>
-                                            <SignaturePad onChange={(val) => updateAdultRider(i, 'signature', val)} />
                                         </div>
                                     ))}
                                 </div>
@@ -502,14 +591,18 @@ const Rent: React.FC = () => {
                         <button 
                             type="button" 
                             onClick={() => {
-                                setShowWaiver(false);
                                 setWaiverCheckbox(false);
+                                setAgreementRead(false);
+                                setSafetyVideoWatched(false);
                                 setDateOfBirth('');
                                 setSignatureDataUrl(null);
                                 setNumberOfKids(0);
                                 setChildNames([]);
+                                setChildDobs([]);
                                 setGuardianSignature(null);
-                                setAdultRiders([]);
+                                setGuardian({ fullName: '', relationship: '', phone: '' });
+                                setGuardianAgreed(false);
+
                             }}
                             style={{ flex: 1, backgroundColor: '#666' }}
                         >
@@ -518,8 +611,8 @@ const Rent: React.FC = () => {
                         <button 
                             type="button" 
                             onClick={waiverSigned ? handleConfirmWaiver : handleSignWaiver}
-                            disabled={!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()}
-                            style={{ flex: 2, opacity: (!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl)) || !!validateAdditionalRiders()) ? 0.5 : 1 }}
+                            disabled={!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl || !!validateRenterDetails() || !agreementRead || !safetyVideoWatched)) || !!validateAdditionalRiders()}
+                            style={{ flex: 2, opacity: (!waiverCheckbox || (!waiverSigned && (!dateOfBirth || calculateAge(dateOfBirth) < MINIMUM_RENTAL_AGE || !signatureDataUrl || !!validateRenterDetails() || !agreementRead || !safetyVideoWatched)) || !!validateAdditionalRiders()) ? 0.5 : 1 }}
                         >
                             {waiverSigned ? 'Confirm and Continue' : 'Sign and Continue'}
                         </button>
@@ -793,12 +886,6 @@ const Rent: React.FC = () => {
                                     title: 'Locker Location',
                                     description: 'Find your kayak locker using the location code provided after payment.',
                                     placeholder: 'Place image: locker-location.jpg'
-                                },
-                                {
-                                    type: 'video',
-                                    title: 'Using Your Passcode',
-                                    description: 'Enter your unique passcode on the locker keypad to unlock your kayak.',
-                                    placeholder: 'Place video: passcode-entry.mp4'
                                 },
                                 {
                                     type: 'video',

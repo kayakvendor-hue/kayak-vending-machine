@@ -17,7 +17,35 @@ interface Rental {
     rentalStatus?: 'active' | 'completed' | 'cancelled';
     kayakLockId?: number;
     lifevestLockId?: number;
+    paymentIntentId?: string;
+    additionalRiders?: { riderType: 'child' | 'adult' }[];
 }
+
+interface RentalGroup {
+    key: string;
+    rentals: Rental[];
+}
+
+const waiverButtonStyle: React.CSSProperties = {
+    backgroundColor: '#1976d2',
+    color: 'white',
+    border: 'none',
+    padding: '8px 14px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: 'bold'
+};
+
+// Rentals booked together share a payment intent, so they form one group
+const groupRentals = (list: Rental[]): RentalGroup[] => {
+    const groups = new Map<string, Rental[]>();
+    list.forEach(rental => {
+        const key = rental.paymentIntentId || rental._id;
+        groups.set(key, [...(groups.get(key) || []), rental]);
+    });
+    return Array.from(groups.entries(), ([key, rentals]) => ({ key, rentals }));
+};
 
 const Account: React.FC = () => {
     const history = useHistory();
@@ -25,6 +53,7 @@ const Account: React.FC = () => {
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const displayName = (JSON.parse(localStorage.getItem('user') || '{}') as { name?: string }).name || 'User';
 
     useEffect(() => {
@@ -55,7 +84,106 @@ const Account: React.FC = () => {
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     };
 
+    const handleDownloadPdf = async (url: string, filename: string) => {
+        try {
+            const response = await api.get(url, { responseType: 'blob' });
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(objectUrl);
+        } catch (err) {
+            alert('Could not download the waiver PDF.');
+        }
+    };
+
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(groupId)) {
+                next.delete(groupId);
+            } else {
+                next.add(groupId);
+            }
+            return next;
+        });
+    };
+
+    // Renders each booking as a collapsible group; the header lists the waiver PDFs for every adult
+    const renderRentalGroups = (section: string, list: Rental[], renderCard: (rental: Rental) => React.ReactNode) =>
+        groupRentals(list).map(group => {
+            const groupId = `${section}-${group.key}`;
+            const isOpen = expandedGroups.has(groupId);
+            const first = group.rentals[0];
+            const kayakNames = group.rentals.map(r => r.kayakId?.name || 'Kayak (deleted)').join(', ');
+            const adultRiders = (first.additionalRiders || [])
+                .map((rider, index) => ({ rider, index }))
+                .filter(({ rider }) => rider.riderType === 'adult');
+
+            return (
+                <div
+                    key={groupId}
+                    style={{
+                        backgroundColor: 'white',
+                        padding: '15px',
+                        borderRadius: '12px',
+                        border: '2px solid #e0e7ff',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                >
+                    <div
+                        onClick={() => toggleGroup(groupId)}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+                    >
+                        <div>
+                            <strong style={{ color: '#667eea' }}>
+                                {group.rentals.length} kayak{group.rentals.length === 1 ? '' : 's'}
+                            </strong>
+                            <div style={{ color: '#666', fontSize: '0.9rem' }}>{kayakNames}</div>
+                        </div>
+                        <span style={{ color: '#667eea', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                            {isOpen ? '▾ Hide' : '▸ Show'}
+                        </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                        <button
+                            onClick={() => handleDownloadPdf(`/api/rental/history/${first._id}/waiver.pdf`, `kayak-waiver-${first._id}.pdf`)}
+                            style={waiverButtonStyle}
+                        >
+                            Adult 1 Waiver PDF
+                        </button>
+                        {adultRiders.map(({ index }, adultPos) => (
+                            <button
+                                key={index}
+                                onClick={() => handleDownloadPdf(
+                                    `/api/rental/history/${first._id}/riders/${index}/waiver.pdf`,
+                                    `kayak-waiver-${first._id}-adult-${adultPos + 2}.pdf`
+                                )}
+                                style={waiverButtonStyle}
+                            >
+                                Adult {adultPos + 2} Waiver PDF
+                            </button>
+                        ))}
+                    </div>
+
+                    {isOpen && (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                            gap: '15px',
+                            marginTop: '15px'
+                        }}>
+                            {group.rentals.map(renderCard)}
+                        </div>
+                    )}
+                </div>
+            );
+        });
+
     if (loading) {
+
         return (
             <div className="page-container" style={{ textAlign: 'center', paddingTop: '60px' }}>
                 
@@ -128,12 +256,11 @@ const Account: React.FC = () => {
                     </div>
                 ) : (
                     <div style={{ 
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                        justifyContent: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
                         gap: '20px'
                     }}>
-                        {activeRentals.map((rental) => {
+                        {renderRentalGroups('active', activeRentals, (rental) => {
                             // Handle case where kayak was deleted
                             const kayakName = rental.kayakId?.name || 'Kayak (deleted)';
                             const kayakLocation = rental.kayakId?.location || 'N/A';
@@ -334,12 +461,11 @@ const Account: React.FC = () => {
                     </div>
                 ) : (
                     <div style={{ 
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                        justifyContent: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
                         gap: '15px'
                     }}>
-                        {returnedRentals.map((rental) => {
+                        {renderRentalGroups('history', returnedRentals, (rental) => {
                             const kayakName = rental.kayakId?.name || 'Kayak (deleted)';
                             const kayakLocation = rental.kayakId?.location || 'N/A';
                             

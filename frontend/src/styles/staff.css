@@ -106,16 +106,6 @@
     font-size: 14px;
 }
 
-.passcode {
-    font-family: monospace;
-    font-size: 16px !important;
-    font-weight: bold;
-    color: #667eea !important;
-    background: #f5f5f5;
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
 .photo-section {
     margin-top: 15px;
     padding: 15px;

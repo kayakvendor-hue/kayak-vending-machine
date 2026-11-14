@@ -9,6 +9,7 @@ router.post('/signup', signupLimiter, authController.signup);
 router.post('/login', loginLimiter, authController.login);
 router.get('/profile', authenticate, authController.getProfile);
 router.put('/profile', authenticate, authController.updateProfile);
+router.post('/safety-video/complete', authenticate, authController.completeSafetyVideo);
 router.delete('/account', authenticate, authController.deleteAccount);
 
 export default router;

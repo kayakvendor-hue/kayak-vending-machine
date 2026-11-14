@@ -18,7 +18,6 @@ export interface Rental {
     kayakId: string;
     rentalStart: Date;
     rentalEnd: Date;
-    passcode: string;
 }
 
 export interface Kayak {

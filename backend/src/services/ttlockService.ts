@@ -15,112 +15,6 @@ export class TTLockService {
     }
 
     /**
-     * Generate a RANDOM TIMED passcode for a lock (doesn't need gateway)
-     * @param lockId - The TTLock lock ID
-     * @param startDate - When the passcode becomes valid (timestamp in ms)
-     * @param endDate - When the passcode expires (timestamp in ms)
-     * @returns Object containing the generated passcode and passcodeId
-     */
-    async generatePasscode(lockId: number, startDate: number, endDate: number): Promise<{ passcode: string; passcodeId: number }> {
-        console.log(`🔐 Attempting to generate RANDOM TIMED passcode for lock ${lockId}`);
-        console.log(`⏰ Valid from ${new Date(startDate)} to ${new Date(endDate)}`);
-        
-        await this.ensureAccessToken();
-        console.log(`✅ Access token obtained: ${this.accessToken?.substring(0, 20)}...`);
-
-        try {
-            // TTLock API endpoint for getting RANDOM passcode (no gateway needed)
-            // Try GET method with query parameters
-            const params = {
-                clientId: this.clientId,
-                accessToken: this.accessToken!,
-                lockId: lockId.toString(),
-                keyboardPwdType: '3', // 3 = Period/Timed passcode
-                keyboardPwdName: 'Kayak Rental',
-                startDate: startDate.toString(),
-                endDate: endDate.toString(),
-                date: Date.now().toString()
-            };
-            
-            console.log(`📤 Requesting random timed passcode from TTLock API`);
-            console.log(`   Endpoint: ${this.apiUrl}/v3/keyboardPwd/get`);
-            console.log(`   Parameters:`, params);
-            
-            const response = await axios.get(
-                `${this.apiUrl}/v3/keyboardPwd/get`,
-                { params }
-            );
-
-            console.log(`📥 TTLock API Response:`, response.data);
-
-            if (response.data.keyboardPwd) {
-                const passcode = response.data.keyboardPwd;
-                const passcodeId = response.data.keyboardPwdId;
-                console.log(`✅ Random passcode successfully generated: ${passcode} (ID: ${passcodeId})`);
-                return { passcode, passcodeId };
-            } else if (response.data.errcode !== undefined && response.data.errcode !== 0) {
-                console.error('❌ API Error:', response.data);
-                throw new Error(`API error ${response.data.errcode}: Unable to generate passcode`);
-            } else {
-                throw new Error('No passcode in response');
-            }
-        } catch (error: any) {
-            console.error('❌ Failed to get TTLock random passcode:', error.response?.data || error.message);
-            // Fallback to random passcode if API fails
-            const fallback = this.generateRandomPasscode();
-            console.log(`⚠️ Using fallback passcode: ${fallback}`);
-            return { passcode: fallback, passcodeId: 0 };
-        }
-    }
-
-    /**
-     * Delete a passcode from a lock
-     * @param lockId - The TTLock lock ID
-     * @param passcodeId - The passcode ID to delete
-     */
-    async deletePasscode(lockId: number, passcodeId: number): Promise<boolean> {
-        await this.ensureAccessToken();
-
-        try {
-            console.log(`🗑️ Deleting keyboard passcode ID ${passcodeId} from lock ${lockId}`);
-            
-            const params = new URLSearchParams({
-                clientId: this.clientId,
-                accessToken: this.accessToken!,
-                lockId: lockId.toString(),
-                keyboardPwdId: passcodeId.toString(),
-                deleteType: '2', // 2 = Delete from lock
-                date: Date.now().toString()
-            });
-
-            console.log(`📤 POST ${this.apiUrl}/v3/keyboardPwd/delete`);
-
-            const response = await axios.post(
-                `${this.apiUrl}/v3/keyboardPwd/delete`,
-                params,
-                {
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
-                }
-            );
-
-            console.log(`📥 TTLock delete response:`, response.data);
-
-            if (response.data.errcode === 0) {
-                console.log(`✅ Passcode deleted successfully`);
-                return true;
-            } else {
-                console.error(`❌ TTLock delete error:`, response.data);
-                return false;
-            }
-        } catch (error: any) {
-            console.error('❌ Failed to delete TTLock passcode:', error.response?.data || error.message);
-            return false;
-        }
-    }
-
-    /**
      * Ensure we have a valid access token
      */
     private async ensureAccessToken(): Promise<void> {
@@ -535,13 +429,6 @@ export class TTLockService {
             console.error('❌ Failed to query locks for gateway:', error.response?.data || error.message);
             throw error;
         }
-    }
-
-    /**
-     * Generate a random 6-digit passcode
-     */
-    private generateRandomPasscode(): string {
-        return Math.floor(100000 + Math.random() * 900000).toString();
     }
 
     /**

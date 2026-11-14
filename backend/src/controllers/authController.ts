@@ -87,8 +87,8 @@ class AuthController {
                 });
             }
 
-            // Rental and waiver records only reference the user by ID and hold no personal details,
-            // so removing the user document anonymizes them while keeping the financial/legal history.
+            // Removes only the login account. Rental and waiver records are kept for legal and financial
+            // history; the waiver stores its own copy of the renter's name, email, and signature.
             await User.deleteOne({ _id: userId });
 
             res.status(200).json({ success: true, message: 'Account deleted' });
@@ -163,6 +163,7 @@ class AuthController {
                     waiverSignedAt: waiverState.signedAt,
                     waiverExpiresAt: waiverState.expiresAt,
                     isWaiverExpired: waiverState.isExpired,
+                    safetyVideoWatchedAt: user.safetyVideoWatchedAt || null,
                 },
                 rentalHistory
             });
@@ -251,6 +252,26 @@ class AuthController {
             });
         } catch (err: any) {
             res.status(500).json({ success: false, message: safeError(err, 'Failed to update profile') });
+        }
+    }
+
+    // One-time: the first call records the account's safety video viewing; later calls keep the original date.
+    async completeSafetyVideo(req: AuthRequest, res: Response) {
+        try {
+            const userId = req.userId;
+            const user = await User.findById(userId);
+            if (!user) {
+                return res.status(404).json({ success: false, message: 'User not found' });
+            }
+
+            if (!user.safetyVideoWatchedAt) {
+                user.safetyVideoWatchedAt = new Date();
+                await user.save();
+            }
+
+            res.status(200).json({ success: true, safetyVideoWatchedAt: user.safetyVideoWatchedAt });
+        } catch (err: any) {
+            res.status(500).json({ success: false, message: safeError(err, 'Failed to record safety video') });
         }
     }
 }

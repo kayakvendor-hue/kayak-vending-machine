@@ -18,7 +18,6 @@ interface ActiveRental {
     };
     rentalStart: string;
     rentalEnd: string;
-    passcode: string;
     status: string;
     returnPhotoUrl?: string;
     rentalStatus?: 'active' | 'completed' | 'cancelled';

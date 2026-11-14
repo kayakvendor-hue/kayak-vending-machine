@@ -5,8 +5,6 @@ import RemoteUnlockPanel from '../components/RemoteUnlock/RemoteUnlockPanel';
 import api from '../config/axios';
 
 interface LocationState {
-    kayakPasscode?: string;
-    lifevestPasscode?: string;
     kayakName?: string;
     kayakLocation?: string;
     duration?: string;
@@ -15,8 +13,6 @@ interface LocationState {
     rentals?: Array<{
         _id: string;
         kayakId: string | any;
-        kayakPasscode: string;
-        lifevestPasscode: string;
         kayakName: string;
         kayakLocation: string;
         rentalEnd: string;
@@ -28,7 +24,6 @@ interface LocationState {
 const Passcode: React.FC = () => {
     const location = useLocation<LocationState>();
     const history = useHistory();
-    const [showPasscodes, setShowPasscodes] = useState<Set<string>>(new Set());
     const [showCamera, setShowCamera] = useState(false);
     const [pickupPhoto, setPickupPhoto] = useState<string | null>(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -60,8 +55,6 @@ const Passcode: React.FC = () => {
                     setLoadedRentals([{
                         _id: latestRental._id,
                         kayakId: latestRental.kayakId,
-                        kayakPasscode: latestRental.kayakPasscode,
-                        lifevestPasscode: latestRental.lifevestPasscode,
                         kayakName: latestRental.kayakId?.name || 'Kayak',
                         kayakLocation: latestRental.kayakId?.location || 'Location',
                         rentalEnd: latestRental.rentalEnd,
@@ -78,27 +71,15 @@ const Passcode: React.FC = () => {
 
 
     // Support both single and multiple kayak rentals
-    const kayakRentals = rentals || loadedRentals || (state.kayakPasscode ? [{
-        _id: '1',
-        kayakPasscode: state.kayakPasscode,
-        lifevestPasscode: state.lifevestPasscode,
-        kayakName: state.kayakName || '',
-        kayakLocation: state.kayakLocation || '',
-        rentalEnd: state.rentalEnd || '',
-        kayakLockId: undefined,
-        lifevestLockId: undefined
-    }] : []);
+    const kayakRentals = rentals || loadedRentals || [];
 
-    const togglePasscodes = (rentalId: string) => {
-        setShowPasscodes(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(rentalId)) {
-                newSet.delete(rentalId);
-            } else {
-                newSet.add(rentalId);
-            }
-            return newSet;
-        });
+    const handleReturn = () => {
+        const rentalId = kayakRentals[0]?._id;
+        if (rentalId) {
+            history.push(`/return?rentalId=${rentalId}`);
+        } else {
+            history.push('/account');
+        }
     };
 
     const formatReturnTime = (endTime?: string) => {
@@ -313,93 +294,6 @@ const Passcode: React.FC = () => {
                                 </ul>
                             </div>
 
-                            {/* Passcodes Section - Only show if passcodes exist */}
-                            {rental.kayakPasscode && rental.lifevestPasscode && (
-                            <details style={{
-                                backgroundColor: '#f5f5f5',
-                                border: '1px solid #ddd',
-                                borderRadius: '8px',
-                                padding: '0',
-                                marginBottom: '15px',
-                                cursor: 'pointer'
-                            }}>
-                                <summary style={{
-                                    padding: '12px 15px',
-                                    fontWeight: '600',
-                                    color: '#666',
-                                    userSelect: 'none',
-                                    fontSize: '14px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                }}>
-                                    <span>Backup Passcodes (if button doesn't work)</span>
-                                </summary>
-                                
-                                <div style={{
-                                    padding: '12px 15px',
-                                    borderTop: '1px solid #ddd',
-                                    backgroundColor: '#fafafa'
-                                }}>
-                                    <div style={{ marginBottom: '12px' }}>
-                                        <p style={{
-                                            margin: '0 0 5px 0',
-                                            fontSize: '12px',
-                                            fontWeight: '600',
-                                            color: '#999',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px'
-                                        }}>
-                                            Kayak Lock
-                                        </p>
-                                        <p style={{
-                                            margin: '0',
-                                            fontSize: '18px',
-                                            fontFamily: 'monospace',
-                                            fontWeight: 'bold',
-                                            color: '#667eea',
-                                            letterSpacing: '2px',
-                                            backgroundColor: 'white',
-                                            padding: '8px 12px',
-                                            borderRadius: '4px',
-                                            border: '1px solid #e0e0e0',
-                                            textAlign: 'center'
-                                        }}>
-                                            {rental.kayakPasscode}
-                                        </p>
-                                    </div>
-                                    
-                                    <div>
-                                        <p style={{
-                                            margin: '0 0 5px 0',
-                                            fontSize: '12px',
-                                            fontWeight: '600',
-                                            color: '#999',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px'
-                                        }}>
-                                            Lifevest/Paddle Lock
-                                        </p>
-                                        <p style={{
-                                            margin: '0',
-                                            fontSize: '18px',
-                                            fontFamily: 'monospace',
-                                            fontWeight: 'bold',
-                                            color: '#f57c00',
-                                            letterSpacing: '2px',
-                                            backgroundColor: 'white',
-                                            padding: '8px 12px',
-                                            borderRadius: '4px',
-                                            border: '1px solid #e0e0e0',
-                                            textAlign: 'center'
-                                        }}>
-                                            {rental.lifevestPasscode}
-                                        </p>
-                                    </div>
-                                </div>
-                            </details>
-                            )}
-
                             {/* Remote Unlock Panel */}
                             <div style={{ marginTop: '20px' }}>
                                 <RemoteUnlockPanel 
@@ -430,8 +324,8 @@ const Passcode: React.FC = () => {
                         <div style={{ marginBottom: '15px' }}>
                             <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>Before You Launch:</h4>
                             <ol style={{ margin: 0, paddingLeft: '20px', color: '#666', lineHeight: '1.8' }}>
-                                <li>Press <strong>Unlock Kayak</strong> button to release the kayak (use passcode if needed)</li>
-                                <li>Press <strong>Unlock Gear</strong> button to open the lifevest/paddle compartment (use passcode if needed)</li>
+                                <li>Press <strong>Unlock Kayak</strong> button to release the kayak</li>
+                                <li>Press <strong>Unlock Gear</strong> button to open the lifevest/paddle compartment</li>
                                 <li>Secure the gear compartment lock</li>
                                 <li>Check kayak condition - take a photo if you notice any damage</li>
                                 <li>You're ready to paddle! Enjoy!</li>
@@ -442,7 +336,7 @@ const Passcode: React.FC = () => {
                             <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '16px' }}>When You Return:</h4>
                             <ol style={{ margin: 0, paddingLeft: '20px', color: '#666', lineHeight: '1.8' }}>
                                 <li>Return kayak to the locked storage area</li>
-                                <li>Lock the lifevest/paddle compartment (use button or passcode)</li>
+                                <li>Lock the lifevest/paddle compartment (use the button)</li>
                                 <li>Click "Return Rental" and take a return photo</li>
                                 <li>Thank you for choosing us!</li>
                             </ol>
@@ -629,7 +523,7 @@ const Passcode: React.FC = () => {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button
-                            onClick={() => history.push('/account')}
+                            onClick={handleReturn}
                             style={{
                                 padding: '12px 24px',
                                 fontSize: '16px',
@@ -678,7 +572,7 @@ const Passcode: React.FC = () => {
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <h1>No Passcode Found</h1>
+                    <h1>No Rental Found</h1>
                     <p style={{ color: '#666', marginBottom: '20px' }}>
                         Please complete a kayak rental first.
                     </p>

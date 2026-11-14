@@ -79,7 +79,7 @@ const Home: React.FC = () => {
                 <p style={styles.body}>
                     {isLoggedIn 
                         ? 'Select your rental duration and unlock your kayak—all in seconds.'
-                        : 'Sign in, complete the waiver, and get your kayak passcode. Simple, fast, and ready to go.'
+                        : 'Sign in, complete the waiver, and get your kayak. Simple, fast, and ready to go.'
                     }
                 </p>
 

@@ -18,7 +18,6 @@ interface ActiveRental {
     };
     rentalStart: string;
     rentalEnd: string;
-    passcode: string;
     status: string;
     rentalStatus?: 'active' | 'completed' | 'cancelled';
 }
@@ -157,10 +156,6 @@ const StaffUnlock: React.FC = () => {
 
                                 <div className="info-section">
                                     <h4>Rental Details</h4>
-                                    <div className="info-row">
-                                        <span className="label">Passcode:</span>
-                                        <span className="passcode">{rental.passcode}</span>
-                                    </div>
                                     <div className="info-row">
                                         <span className="label">Location:</span>
                                         <span>{rental.kayakId.location}</span>

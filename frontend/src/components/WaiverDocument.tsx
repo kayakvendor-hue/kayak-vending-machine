@@ -1,14 +1,130 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
+import SignaturePad from './SignaturePad';
+
+export interface RenterFields {
+    fullName: string;
+    address: string;
+    phone: string;
+    email: string;
+    emergencyName: string;
+    emergencyRelationship: string;
+    emergencyPhone: string;
+}
+
+export interface MinorFields {
+    name: string;
+    dateOfBirth: string;
+}
+
+export interface GuardianFields {
+    fullName: string;
+    relationship: string;
+    phone: string;
+}
 
 interface WaiverDocumentProps {
-    // Fill-in fields and signature boxes for the renter, placed after the agreement text.
-    renterBlock?: ReactNode;
-    // Parent/guardian release and its fill-in fields. Shown only when a minor is riding.
-    guardianBlock?: ReactNode;
+    // When provided, the renter's fill-in boxes appear after the renter acknowledgment.
+    renter?: RenterFields;
+    onRenterChange?: (field: keyof RenterFields, value: string) => void;
+    // Renter's date of birth, shown in the renter block above the emergency contact.
+    dateOfBirth?: string;
+    onDateOfBirthChange?: (value: string) => void;
+    maxDateOfBirth?: string;
+    dateOfBirthError?: ReactNode;
+    // Renter's signature, placed above the renter's date.
+    renterSignature?: string | null;
+    onRenterSignatureChange?: (dataUrl: string | null) => void;
+    // When provided, checkboxes appear beside the renter acknowledgment sentences.
+    agreementChecked?: boolean;
+    onAgreementChange?: (checked: boolean) => void;
+    safetyVideoChecked?: boolean;
+    onSafetyVideoChange?: (checked: boolean) => void;
+    // When provided with entries, the parent/guardian release and minors' boxes appear.
+    minors?: MinorFields[];
+    onMinorChange?: (index: number, field: keyof MinorFields, value: string) => void;
+    // Parent/guardian signature, placed above the guardian's date.
+    guardianSignature?: string | null;
+    onGuardianSignatureChange?: (dataUrl: string | null) => void;
+    // Parent/guardian details and their acknowledgment checkbox, shown in the release for minors.
+    guardian?: GuardianFields;
+    onGuardianChange?: (field: keyof GuardianFields, value: string) => void;
+    guardianAgreed?: boolean;
+    onGuardianAgreedChange?: (checked: boolean) => void;
 }
+
+// A small box that shows the signature. Clicking it opens a larger pad to draw in;
+// submitting shrinks it back down to show the signature.
+export const SignatureField: React.FC<{ value: string | null; onChange: (dataUrl: string | null) => void }> = ({ value, onChange }) => {
+    const [editing, setEditing] = useState(false);
+
+    if (editing) {
+        return (
+            <div style={{ width: 'min(480px, 100%)', margin: '6px 0' }}>
+                <SignaturePad
+                    height={150}
+                    clearLabel="Erase"
+                    onChange={(dataUrl) => {
+                        onChange(dataUrl);
+                        if (dataUrl) setEditing(false);
+                    }}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+                display: 'block',
+                width: 'min(280px, 100%)',
+                height: '34px',
+                margin: '6px 0',
+                padding: 0,
+                border: '1px solid #888',
+                borderRadius: '4px',
+                backgroundColor: '#fff',
+                cursor: 'pointer',
+                textAlign: 'left',
+                overflow: 'hidden'
+            }}
+        >
+            {value
+                ? <img src={value} alt="Signature" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                : <span style={{ color: '#888', fontSize: '13px', padding: '0 8px', lineHeight: '34px' }}>Click to sign</span>}
+        </button>
+    );
+};
 
 const paragraphStyle: React.CSSProperties = { margin: '0 0 10px 0' };
 const headingStyle: React.CSSProperties = { margin: '12px 0 4px 0', fontWeight: 'bold' };
+
+// A fill-in box placed on the same line as its label, like the blanks on the PDF.
+export const FillIn: React.FC<{ label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; max?: string }> = ({ label, value, onChange, type = 'text', placeholder, max }) => (
+    <div style={{ margin: '6px 0' }}>
+        <span style={{ marginRight: '6px' }}>{label}</span>
+        <input
+            type={type}
+            value={value}
+            placeholder={placeholder}
+            max={max}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+                display: 'inline-block',
+                verticalAlign: 'middle',
+                width: 'min(280px, 100%)',
+                boxSizing: 'border-box',
+                padding: '4px 8px',
+                border: '1px solid #888',
+                borderRadius: '4px',
+                font: 'inherit',
+                backgroundColor: '#fff',
+                color: '#000'
+            }}
+        />
+    </div>
+);
 
 const Section: React.FC<{ heading: string; paragraphs: string[] }> = ({ heading, paragraphs }) => (
     <>
@@ -23,9 +139,8 @@ const Bullets: React.FC<{ items: string[] }> = ({ items }) => (
     </ul>
 );
 
-// The waiver text, matching the signed PDF. Fields are supplied by the rental page so they can be
-// placed where the PDF has its signature blocks.
-const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renterBlock, guardianBlock }) => (
+// The waiver text, matching the signed PDF, with fill-in boxes placed where the PDF has its blanks.
+const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renter, onRenterChange, dateOfBirth, onDateOfBirthChange, maxDateOfBirth, dateOfBirthError, renterSignature, onRenterSignatureChange, agreementChecked, onAgreementChange, safetyVideoChecked, onSafetyVideoChange, minors, onMinorChange, guardianSignature, onGuardianSignatureChange, guardian, onGuardianChange, guardianAgreed, onGuardianAgreedChange }) => (
     <div style={{
         border: '1px solid #ccc',
         padding: '18px',
@@ -98,16 +213,50 @@ const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renterBlock, guardianBl
             <strong>I HAVE READ THIS AGREEMENT AND FULLY UNDERSTAND IT. I UNDERSTAND THAT BY SIGNING IT I AM GIVING UP MY RIGHT TO SUE THE RELEASEES FOR INJURY OR DEATH, INCLUDING INJURY OR DEATH CAUSED BY THEIR NEGLIGENCE, THAT I AM RESPONSIBLE FOR ANY DAMAGE, LOSS, OR THEFT OF THE RENTED EQUIPMENT, AND I SIGN IT VOLUNTARILY.</strong>
         </p>
 
-        <p style={paragraphStyle}>I have read this Agreement and I agree to its terms. I have watched the Company's safety video.</p>
+        <div style={paragraphStyle}>
+            {onAgreementChange ? (
+                <label style={{ display: 'flex', alignItems: 'flex-start', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!agreementChecked} onChange={(e) => onAgreementChange(e.target.checked)} style={{ marginRight: '8px', marginTop: '4px', width: '18px', height: '18px', flexShrink: 0 }} />
+                    <span>I have read this Agreement and I agree to its terms.</span>
+                </label>
+            ) : (
+                <span>I have read this Agreement and I agree to its terms.</span>
+            )}
+            {onSafetyVideoChange ? (
+                <label style={{ display: 'flex', alignItems: 'flex-start', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!safetyVideoChecked} onChange={(e) => onSafetyVideoChange(e.target.checked)} style={{ marginRight: '8px', marginTop: '4px', width: '18px', height: '18px', flexShrink: 0 }} />
+                    <span>I have watched the Company's safety video.</span>
+                </label>
+            ) : (
+                <span>I have watched the Company's safety video.</span>
+            )}
+        </div>
 
-        {renterBlock && (
-            <div style={{ borderTop: '1px solid #ddd', marginTop: '14px', paddingTop: '14px' }}>
-                <p style={headingStyle}>Renter</p>
-                {renterBlock}
+        {renter && onRenterChange && (
+            <div style={{ marginTop: '8px' }}>
+                <FillIn label="Full Name:" value={renter.fullName} onChange={(v) => onRenterChange('fullName', v)} />
+                <FillIn label="Address:" value={renter.address} onChange={(v) => onRenterChange('address', v)} />
+                <FillIn label="Phone:" value={renter.phone} onChange={(v) => onRenterChange('phone', v)} type="tel" />
+                <FillIn label="Email:" value={renter.email} onChange={(v) => onRenterChange('email', v)} type="email" />
+                {onDateOfBirthChange && (
+                    <>
+                        <FillIn label="Date of Birth:" value={dateOfBirth ?? ''} onChange={onDateOfBirthChange} type="date" max={maxDateOfBirth} />
+                        {dateOfBirthError}
+                    </>
+                )}
+                <p style={{ margin: '10px 0 0 0', fontWeight: 'bold' }}>Emergency Contact:</p>
+                <div style={{ paddingLeft: '16px' }}>
+                    <FillIn label="Name:" value={renter.emergencyName} onChange={(v) => onRenterChange('emergencyName', v)} />
+                    <FillIn label="Relationship:" value={renter.emergencyRelationship} onChange={(v) => onRenterChange('emergencyRelationship', v)} />
+                    <FillIn label="Phone:" value={renter.emergencyPhone} onChange={(v) => onRenterChange('emergencyPhone', v)} type="tel" />
+                </div>
+                <p style={{ margin: '10px 0 4px 0', fontWeight: 'bold' }}>Signature:</p>
+                <SignatureField value={renterSignature ?? null} onChange={(v) => onRenterSignatureChange?.(v)} />
+                <p style={{ margin: '10px 0 0 0' }}><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
             </div>
         )}
 
-        {guardianBlock && (
+        {minors && minors.length > 0 && (
             <div style={{ borderTop: '2px solid #000', marginTop: '20px', paddingTop: '14px' }}>
                 <h3 style={{ textAlign: 'center', margin: '0 0 12px 0' }}>PARENT OR GUARDIAN RELEASE FOR MINORS</h3>
                 <p style={paragraphStyle}>
@@ -131,7 +280,32 @@ const WaiverDocument: React.FC<WaiverDocumentProps> = ({ renterBlock, guardianBl
                 <p style={paragraphStyle}>
                     <strong>I HAVE READ THIS RELEASE AND THE AGREEMENT ABOVE AND FULLY UNDERSTAND THEM. I UNDERSTAND THAT BY SIGNING I AM GIVING UP MY OWN RIGHT, AND TO THE FULLEST EXTENT PERMITTED BY LAW THE MINOR'S RIGHT, TO SUE THE RELEASEES FOR INJURY OR DEATH, INCLUDING INJURY OR DEATH CAUSED BY THEIR NEGLIGENCE, AND I SIGN IT VOLUNTARILY.</strong>
                 </p>
-                {guardianBlock}
+                <p style={{ fontWeight: 'bold', margin: '10px 0 4px 0' }}>Minors:</p>
+                {minors.map((minor, i) => (
+                    <div key={i} style={{ paddingLeft: '16px' }}>
+                        <FillIn label={`Minor #${i + 1} Name:`} value={minor.name} onChange={(v) => onMinorChange?.(i, 'name', v)} placeholder="Full name" />
+                        <FillIn label={`Minor #${i + 1} Date of Birth:`} value={minor.dateOfBirth} onChange={(v) => onMinorChange?.(i, 'dateOfBirth', v)} type="date" />
+                    </div>
+                ))}
+                <p style={{ margin: '10px 0 4px 0', fontWeight: 'bold' }}>Parent or Guardian:</p>
+                {onGuardianAgreedChange ? (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', cursor: 'pointer', margin: '0 0 8px 0' }}>
+                        <input type="checkbox" checked={!!guardianAgreed} onChange={(e) => onGuardianAgreedChange(e.target.checked)} style={{ marginRight: '8px', marginTop: '4px', width: '18px', height: '18px', flexShrink: 0 }} />
+                        <span>I have read this Release and the Agreement above and I agree to their terms.</span>
+                    </label>
+                ) : (
+                    <span>I have read this Release and the Agreement above and I agree to their terms.</span>
+                )}
+                <p style={{ margin: '10px 0 4px 0', fontWeight: 'bold' }}>Signature:</p>
+                <SignatureField value={guardianSignature ?? null} onChange={(v) => onGuardianSignatureChange?.(v)} />
+                <p style={{ margin: '10px 0 0 0' }}><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                {guardian && (
+                    <>
+                        <FillIn label="Full Name:" value={guardian.fullName} onChange={(v) => onGuardianChange?.('fullName', v)} placeholder="Full name" />
+                        <FillIn label="Relationship to Minor(s):" value={guardian.relationship} onChange={(v) => onGuardianChange?.('relationship', v)} />
+                        <FillIn label="Phone:" value={guardian.phone} onChange={(v) => onGuardianChange?.('phone', v)} type="tel" />
+                    </>
+                )}
             </div>
         )}
     </div>

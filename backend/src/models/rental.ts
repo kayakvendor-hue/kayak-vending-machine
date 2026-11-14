@@ -21,10 +21,28 @@ const riderSchema = new Schema({
         type: String,
         required: false
     },
+    // Adult riders provide their own contact details, the same fields as the account holder.
+    renter: {
+        fullName: { type: String, required: false },
+        address: { type: String, required: false },
+        phone: { type: String, required: false },
+        email: { type: String, required: false },
+        emergencyContact: {
+            name: { type: String, required: false },
+            relationship: { type: String, required: false },
+            phone: { type: String, required: false }
+        }
+    },
     dateSigned: {
         type: Date,
         default: Date.now
     }
+}, { _id: false });
+
+const guardianSchema = new Schema({
+    fullName: { type: String, trim: true, required: false },
+    relationship: { type: String, trim: true, required: false },
+    phone: { type: String, trim: true, required: false }
 }, { _id: false });
 
 const rentalSchema = new Schema({
@@ -137,6 +155,10 @@ const rentalSchema = new Schema({
         type: String,
         required: false,
         description: "Parent/guardian signature authorizing the child riders listed in additionalRiders"
+    },
+    guardianDetails: {
+        type: guardianSchema,
+        required: false
     },
     createdAt: {
         type: Date,

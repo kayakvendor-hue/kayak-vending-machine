@@ -14,14 +14,20 @@ const waiverSchema = new Schema({
         type: Date,
         required: true
     },
+    renter: {
+        fullName: { type: String, required: true },
+        address: { type: String, required: true },
+        phone: { type: String, required: true },
+        email: { type: String, required: true },
+        emergencyContact: {
+            name: { type: String, required: true },
+            relationship: { type: String, required: true },
+            phone: { type: String, required: true }
+        }
+    },
     dateSigned: {
         type: Date,
         default: Date.now
-    },
-    // The answers entered on the waiver form. The PDF is built from this on request
-    // rather than stored. Records signed before this field existed have no form.
-    form: {
-        type: Schema.Types.Mixed
     }
 });
 

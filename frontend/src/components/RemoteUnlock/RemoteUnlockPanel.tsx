@@ -124,7 +124,7 @@ const RemoteUnlockPanel: React.FC<RemoteUnlockPanelProps> = ({ rentalId, kayakNa
           fontSize: '14px',
           textAlign: 'center'
         }}>
-          Locks not yet configured. Use passcode below.
+          Locks not yet configured.
         </div>
       )}
 

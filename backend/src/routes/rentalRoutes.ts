@@ -24,6 +24,8 @@ router.get('/gateway-status', authenticate, rentalController.getGatewayStatus);
 router.post('/pre-payment-check', authenticate, rentalController.prePaymentHealthCheck);
 router.post('/rent', authenticate, rentalController.rentKayak);
 router.get('/history', authenticate, rentalController.getRentalHistory);
+router.get('/history/:rentalId/waiver.pdf', authenticate, rentalController.getMyRentalWaiverPdf);
+router.get('/history/:rentalId/riders/:index/waiver.pdf', authenticate, rentalController.getMyRentalRiderWaiverPdf);
 router.get('/active-rentals', authenticate, rentalController.getActiveRentals);
 router.post('/return', authenticate, upload.single('returnPhoto'), rentalController.returnKayak);
 router.post('/update-pickup-photo', authenticate, rentalController.updatePickupPhoto);

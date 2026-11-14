@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import Rental from '../models/rental';
+import Waiver from '../models/waiver';
 import Kayak from '../models/kayak';
 import Lock from '../models/lock';
 import User from '../models/user';
@@ -10,6 +11,7 @@ import smsService from '../services/smsService';
 import paymentService from '../services/paymentService';
 import { uploadImage } from '../utils/imageUpload';
 import { getUserWaiverState } from '../utils/waiverStatus';
+import { buildRentalWaiverPdf, buildAdultRiderWaiverPdf } from '../utils/waiverPdf';
 import { MINIMUM_RENTAL_AGE, validateDateOfBirth, validateWaiverSignature, isAtLeastMinimumRentalAge } from '../utils/validators';
 import { safeError } from '../utils/errorResponse';
 
@@ -35,6 +37,8 @@ class RentalController {
         this.prePaymentHealthCheck = this.prePaymentHealthCheck.bind(this);
         this.rentKayak = this.rentKayak.bind(this);
         this.getRentalHistory = this.getRentalHistory.bind(this);
+        this.getMyRentalWaiverPdf = this.getMyRentalWaiverPdf.bind(this);
+        this.getMyRentalRiderWaiverPdf = this.getMyRentalRiderWaiverPdf.bind(this);
         this.returnKayak = this.returnKayak.bind(this);
         this.remoteUnlock = this.remoteUnlock.bind(this);
         this.getLockStatus = this.getLockStatus.bind(this);
@@ -149,7 +153,7 @@ class RentalController {
 
     public async rentKayak(req: AuthRequest, res: Response): Promise<void> {
         const userId = req.userId; // From auth middleware
-        const { kayakId, kayakQuantity, rentalDuration, paymentIntentId, pickupPhoto, waiverConfirmedAt, additionalRiders, guardianSignatureForMinors } = req.body;
+        const { kayakId, kayakQuantity, rentalDuration, paymentIntentId, pickupPhoto, waiverConfirmedAt, additionalRiders, guardianSignatureForMinors, guardianDetails } = req.body;
 
         try {
             // Check if user has a current waiver on file
@@ -160,6 +164,15 @@ class RentalController {
             }
 
             const waiverState = await getUserWaiverState(String(userId));
+
+            if (!user.safetyVideoWatchedAt) {
+                res.status(403).json({
+                    success: false,
+                    message: 'Please watch the safety video before renting',
+                    requiresSafetyVideo: true
+                });
+                return;
+            }
 
             if (!waiverState.signed) {
                 res.status(403).json({ 
@@ -212,6 +225,14 @@ class RentalController {
                             res.status(400).json({ success: false, message: `Please enter a name for child rider #${i + 1}.` });
                             return;
                         }
+                        if (!rider.dateOfBirth || !validateDateOfBirth(rider.dateOfBirth)) {
+                            res.status(400).json({ success: false, message: `Please provide a valid date of birth for child rider #${i + 1}.` });
+                            return;
+                        }
+                        if (isAtLeastMinimumRentalAge(rider.dateOfBirth)) {
+                            res.status(400).json({ success: false, message: `Child rider #${i + 1} must be under 18. Adults must sign their own waiver.` });
+                            return;
+                        }
                     } else if (rider?.riderType === 'adult') {
                         if (!rider.dateOfBirth || !validateDateOfBirth(rider.dateOfBirth)) {
                             res.status(400).json({ success: false, message: `Please provide a valid date of birth for adult rider #${i + 1}.` });
@@ -225,6 +246,13 @@ class RentalController {
                             res.status(400).json({ success: false, message: `Please provide a signature for adult rider #${i + 1}.` });
                             return;
                         }
+                        const adultRenter = rider.renter;
+                        if (!adultRenter || !adultRenter.fullName?.trim() || !adultRenter.address?.trim() || !adultRenter.phone?.trim() ||
+                            !adultRenter.email?.trim() || !adultRenter.emergencyContact?.name?.trim() ||
+                            !adultRenter.emergencyContact?.relationship?.trim() || !adultRenter.emergencyContact?.phone?.trim()) {
+                            res.status(400).json({ success: false, message: `Please complete all contact details for adult rider #${i + 1}.` });
+                            return;
+                        }
                     } else {
                         res.status(400).json({ success: false, message: `Invalid rider type for rider #${i + 1}.` });
                         return;
@@ -235,13 +263,29 @@ class RentalController {
                     res.status(400).json({ success: false, message: 'A parent/guardian signature is required for the child rider(s) listed.' });
                     return;
                 }
+
+                if (hasChildRider && (!guardianDetails?.fullName?.trim() || !guardianDetails?.relationship?.trim() || !guardianDetails?.phone?.trim())) {
+                    res.status(400).json({ success: false, message: 'Parent/guardian name, relationship, and phone are required for the child rider(s) listed.' });
+                    return;
+                }
             }
 
             const ridersToStore = ridersInput.map((rider: any) => ({
                 riderType: rider.riderType,
                 name: rider.riderType === 'child' ? String(rider.name).trim() : undefined,
-                dateOfBirth: rider.riderType === 'adult' ? new Date(rider.dateOfBirth) : undefined,
+                dateOfBirth: new Date(rider.dateOfBirth),
                 signature: rider.riderType === 'adult' ? rider.signature : undefined,
+                renter: rider.riderType === 'adult' ? {
+                    fullName: rider.renter.fullName.trim(),
+                    address: rider.renter.address.trim(),
+                    phone: rider.renter.phone.trim(),
+                    email: rider.renter.email.trim(),
+                    emergencyContact: {
+                        name: rider.renter.emergencyContact.name.trim(),
+                        relationship: rider.renter.emergencyContact.relationship.trim(),
+                        phone: rider.renter.emergencyContact.phone.trim()
+                    }
+                } : undefined,
                 dateSigned: new Date()
             }));
 
@@ -351,7 +395,7 @@ class RentalController {
                     console.warn(`⚠️ Storage Box not available or not found`);
                 }
                 
-                // Create the rental with lock IDs only (no passcodes)
+                // Create the rental with lock IDs only
                 const rental: any = await Rental.create({ 
                     userId, 
                     kayakId: kayak._id, 
@@ -364,7 +408,12 @@ class RentalController {
                     pickupPhotoUrl,
                     waiverConfirmedAt: parsedWaiverConfirmedAt,
                     additionalRiders: ridersToStore.length > 0 ? ridersToStore : undefined,
-                    guardianSignatureForMinors: hasChildRider ? guardianSignatureForMinors : undefined
+                    guardianSignatureForMinors: hasChildRider ? guardianSignatureForMinors : undefined,
+                    guardianDetails: hasChildRider ? {
+                        fullName: guardianDetails.fullName.trim(),
+                        relationship: guardianDetails.relationship.trim(),
+                        phone: guardianDetails.phone.trim()
+                    } : undefined
                 });
 
                 // Update lock status if locks are assigned
@@ -449,6 +498,64 @@ class RentalController {
             res.status(200).json({ success: true, rentals });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error fetching rental history', error });
+        }
+    }
+
+    public async getMyRentalWaiverPdf(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const userId = req.userId;
+            const { rentalId } = req.params;
+
+            const rental = await Rental.findOne({ _id: rentalId, userId });
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            const waiver = await Waiver.findOne({ userId }).sort({ dateSigned: -1 });
+            if (!waiver) {
+                res.status(404).json({ success: false, message: 'No waiver on file for this user' });
+                return;
+            }
+
+            const pdfBytes = await buildRentalWaiverPdf(rental, waiver);
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="waiver-${rentalId}.pdf"`);
+            res.status(200).send(Buffer.from(pdfBytes));
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error generating waiver PDF', error: safeError(error) });
+        }
+    }
+
+    public async getMyRentalRiderWaiverPdf(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const userId = req.userId;
+            const { rentalId, index } = req.params;
+
+            const rental = await Rental.findOne({ _id: rentalId, userId });
+            if (!rental) {
+                res.status(404).json({ success: false, message: 'Rental not found' });
+                return;
+            }
+
+            const rider = rental.additionalRiders?.[Number(index)];
+            if (!rider || rider.riderType !== 'adult' || !rider.renter) {
+                res.status(404).json({ success: false, message: 'Adult rider not found on this rental' });
+                return;
+            }
+
+            const pdfBytes = await buildAdultRiderWaiverPdf({
+                renter: rider.renter,
+                signature: rider.signature,
+                dateSigned: rider.dateSigned
+            });
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="waiver-${rentalId}-rider-${index}.pdf"`);
+            res.status(200).send(Buffer.from(pdfBytes));
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error generating rider waiver PDF', error: safeError(error) });
         }
     }
 
@@ -558,8 +665,7 @@ class RentalController {
                 lifevestLock = await Lock.findOne({ lockId: rental.lifevestLockId });
             }
             
-            // Remote unlock is via gateway, no passcodes to delete
-            // Locks will maintain their state and passcodes auto-expire after rental period
+            // Remote unlock is via gateway; nothing to clean up on the locks
 
             // Mark rental as completed
             console.log(`🔴 Marking rental as COMPLETED...`);
@@ -582,7 +688,7 @@ class RentalController {
             // Storage Box (lifevestLock) is shared - DO NOT update its status
             // It remains available for other active rentals
             if (lifevestLock) {
-                console.log(`✅ Storage Box passcodes will auto-expire (lock remains available)`);
+                console.log(`✅ Storage Box lock remains available`);
                 // DO NOT modify lifevestLock status - it's shared across all rentals
             }
             
@@ -665,7 +771,7 @@ class RentalController {
     }
 
     /**
-     * Generate a TTLock passcode for unlocking a kayak
+     * Unlock a kayak or storage box remotely via the gateway
      */
     
     public async remoteUnlock(req: AuthRequest, res: Response): Promise<void> {

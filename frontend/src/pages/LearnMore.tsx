@@ -58,7 +58,7 @@ const LearnMore: React.FC = () => {
         <ol style={{ paddingLeft: '20px' }}>
           <li style={{ marginBottom: '8px' }}>Create an account and sign the rental waiver.</li>
           <li style={{ marginBottom: '8px' }}>Choose a kayak and pay online.</li>
-          <li style={{ marginBottom: '8px' }}>Unlock your kayak at the station with the app or your passcode.</li>
+          <li style={{ marginBottom: '8px' }}>Unlock your kayak at the station with the app.</li>
           <li>Return the kayak to the station when you are done.</li>
         </ol>
       </div>

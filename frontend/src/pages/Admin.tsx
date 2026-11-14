@@ -16,7 +16,6 @@ interface Rental {
     kayakId: { name: string; location: string };
     rentalStart: string;
     rentalEnd: string;
-    passcode: string;
     paymentStatus: string;
     createdAt: string;
     pickupPhotoUrl?: string;
@@ -56,7 +55,6 @@ interface AdminUser {
 }
 
 interface SignatureModalData {
-    userId: string;
     userName: string;
     signature: string;
     dateOfBirth: string;
@@ -161,27 +159,12 @@ const Admin: React.FC = () => {
         }
     };
 
-    const handleDownloadWaiverPdf = async (userId: string, userName: string) => {
-        try {
-            const response = await api.get(`/api/admin/users/${userId}/waiver/pdf`, { responseType: 'blob' });
-            const url = URL.createObjectURL(response.data);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `KayakVendor_Waiver_${userName.replace(/[^a-z0-9]+/gi, '_')}.pdf`;
-            link.click();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            alert('No signed waiver PDF on file for this user. Users who signed before the PDF waiver was added will need to sign again.');
-        }
-    };
-
     const handleViewSignature = async (user: AdminUser) => {
         setLoadingSignatureUserId(user._id);
         try {
             const response = await api.get(`/api/admin/users/${user._id}/waiver`);
             const waiver = response.data.waiver;
             setSignatureModalData({
-                userId: user._id,
                 userName: user.name || user.email,
                 signature: waiver.signature,
                 dateOfBirth: waiver.dateOfBirth,
@@ -191,6 +174,20 @@ const Admin: React.FC = () => {
             alert('No signature on file for this user.');
         } finally {
             setLoadingSignatureUserId(null);
+        }
+    };
+
+    const handleDownloadWaiverPdf = async (url: string, filename: string) => {
+        try {
+            const response = await api.get(url, { responseType: 'blob' });
+            const objectUrl = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(objectUrl);
+        } catch (err) {
+            alert('Could not generate the waiver PDF.');
         }
     };
 
@@ -739,7 +736,6 @@ const Admin: React.FC = () => {
                                     <tr style={{ backgroundColor: '#f5f5f5', textAlign: 'left' }}>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>User</th>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Kayak</th>
-                                        <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Passcode</th>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>Start</th>
                                         <th style={{ padding: '12px', borderBottom: '2px solid #ddd' }}>End</th>
                                         {activeTab === 'active' && (
@@ -765,16 +761,6 @@ const Admin: React.FC = () => {
                                                 {rental.kayakId?.name}
                                                 <br />
                                                 <small style={{ color: '#666' }}>{rental.kayakId?.location}</small>
-                                            </td>
-                                            <td style={{ padding: '12px' }}>
-                                                <span style={{
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '18px',
-                                                    fontWeight: 'bold',
-                                                    color: '#2196F3'
-                                                }}>
-                                                    {rental.passcode}
-                                                </span>
                                             </td>
                                             <td style={{ padding: '12px' }}>{formatDate(rental.rentalStart)}</td>
                                             <td style={{ padding: '12px' }}>{formatDate(rental.rentalEnd)}</td>
@@ -863,6 +849,24 @@ const Admin: React.FC = () => {
                                             </td>
                                             <td style={{ padding: '12px' }}>
                                                 <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                                                    <button
+                                                        onClick={() => handleDownloadWaiverPdf(
+                                                            `/api/admin/rentals/${rental._id}/waiver.pdf`,
+                                                            `waiver-${rental._id}.pdf`
+                                                        )}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#1976d2',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '14px',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        Waiver PDF
+                                                    </button>
                                                     {activeTab === 'active' && !rental.returnPhotoUrl && rental.rentalStatus !== 'completed' && (
                                                         <button
                                                             onClick={() => handleReturnKayak(rental._id)}
@@ -1312,12 +1316,6 @@ const Admin: React.FC = () => {
                             }}
                         />
                         <button
-                            onClick={() => handleDownloadWaiverPdf(signatureModalData.userId, signatureModalData.userName)}
-                            style={{ marginTop: '15px', backgroundColor: '#28a745' }}
-                        >
-                            Download Signed Waiver (PDF)
-                        </button>
-                        <button
                             onClick={() => setSignatureModalData(null)}
                             style={{
                                 width: '100%',
@@ -1429,6 +1427,25 @@ const Admin: React.FC = () => {
                                 ) : (
                                     <em style={{ color: '#c62828' }}>No signature on file</em>
                                 )}
+                                <button
+                                    onClick={() => handleDownloadWaiverPdf(
+                                        `/api/admin/rentals/${riderModalRental._id}/riders/${(riderModalRental.additionalRiders ?? []).indexOf(adult)}/waiver.pdf`,
+                                        `waiver-${riderModalRental._id}-adult-${idx + 1}.pdf`
+                                    )}
+                                    style={{
+                                        marginTop: '10px',
+                                        padding: '8px 16px',
+                                        backgroundColor: '#1976d2',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Download Waiver PDF
+                                </button>
                             </div>
                         ))}
 

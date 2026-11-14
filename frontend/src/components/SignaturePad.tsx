@@ -3,12 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 interface SignaturePadProps {
     onChange: (dataUrl: string | null) => void;
     height?: number;
+    clearLabel?: string;
 }
 
 // Lightweight mouse/touch signature capture rendered on a <canvas>.
 // Calls onChange(null) when empty and onChange(dataUrl) with a PNG data URL
 // whenever the drawn signature changes.
-const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) => {
+const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160, clearLabel = 'Clear' }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const drawingRef = useRef(false);
     const hasDrawnRef = useRef(false);
@@ -172,7 +173,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onChange, height = 160 }) =
                             onClick={handleClear}
                             style={{ padding: '4px 10px', fontSize: '12px', backgroundColor: '#666', width: 'auto' }}
                         >
-                            Clear
+                            {clearLabel}
                         </button>
                         <button
                             type="button"

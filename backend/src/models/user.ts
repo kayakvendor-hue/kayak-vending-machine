@@ -26,6 +26,10 @@ const userSchema = new Schema({
         type: Boolean,
         default: false
     },
+    safetyVideoWatchedAt: {
+        type: Date,
+        required: false
+    },
     resetPasswordToken: {
         type: String,
         required: false

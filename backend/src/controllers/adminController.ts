@@ -5,7 +5,7 @@ import User from '../models/user';
 import Kayak from '../models/kayak';
 import Waiver from '../models/waiver';
 import { safeError } from '../utils/errorResponse';
-import { buildWaiverPdfFromRecord, WaiverFormInput } from '../utils/waiverPdf';
+import { buildRentalWaiverPdf, buildAdultRiderWaiverPdf } from '../utils/waiverPdf';
 
 class AdminController {
     // Get all rentals with user and kayak details
@@ -156,30 +156,6 @@ class AdminController {
         }
     }
 
-    // Build a user's signed waiver PDF on request from the stored answers (nothing is saved)
-    async downloadUserWaiverPdf(req: AuthRequest, res: Response) {
-        try {
-            const { userId } = req.params;
-
-            const waiver = await Waiver.findOne({ userId }).sort({ dateSigned: -1 });
-            if (!waiver?.form) {
-                return res.status(404).json({ success: false, message: 'No signed waiver on file for this user' });
-            }
-
-            const pdf = await buildWaiverPdfFromRecord({
-                form: waiver.form as WaiverFormInput,
-                signature: waiver.signature,
-                dateSigned: waiver.dateSigned,
-            });
-
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename="KayakVendor_Waiver_${userId}.pdf"`);
-            res.status(200).send(pdf);
-        } catch (error) {
-            res.status(500).json({ success: false, message: 'Error downloading waiver', error: safeError(error) });
-        }
-    }
-
     // Get a single user's waiver record (signature image + date of birth + date signed)
     async getUserWaiver(req: AuthRequest, res: Response) {
         try {
@@ -201,6 +177,60 @@ class AdminController {
             });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Error fetching waiver', error: safeError(error) });
+        }
+    }
+
+    // Download the filled-in waiver PDF for a rental's account holder (with minors and guardian)
+    async getRentalWaiverPdf(req: AuthRequest, res: Response) {
+        try {
+            const { rentalId } = req.params;
+
+            const rental = await Rental.findById(rentalId);
+            if (!rental) {
+                return res.status(404).json({ success: false, message: 'Rental not found' });
+            }
+
+            const waiver = await Waiver.findOne({ userId: rental.userId }).sort({ dateSigned: -1 });
+            if (!waiver) {
+                return res.status(404).json({ success: false, message: 'No waiver on file for this user' });
+            }
+
+            const pdfBytes = await buildRentalWaiverPdf(rental, waiver);
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="waiver-${rentalId}.pdf"`);
+            res.status(200).send(Buffer.from(pdfBytes));
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error generating waiver PDF', error: safeError(error) });
+        }
+    }
+
+    // Download the filled-in waiver PDF for one additional adult rider on a rental
+    async getRiderWaiverPdf(req: AuthRequest, res: Response) {
+        try {
+            const { rentalId, index } = req.params;
+
+            const rental = await Rental.findById(rentalId);
+            if (!rental) {
+                return res.status(404).json({ success: false, message: 'Rental not found' });
+            }
+
+            const rider = rental.additionalRiders?.[Number(index)];
+            if (!rider || rider.riderType !== 'adult' || !rider.renter) {
+                return res.status(404).json({ success: false, message: 'Adult rider not found on this rental' });
+            }
+
+            const pdfBytes = await buildAdultRiderWaiverPdf({
+                renter: rider.renter,
+                signature: rider.signature,
+                dateSigned: rider.dateSigned
+            });
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="waiver-${rentalId}-adult-${Number(index) + 1}.pdf"`);
+            res.status(200).send(Buffer.from(pdfBytes));
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Error generating rider waiver PDF', error: safeError(error) });
         }
     }
 
