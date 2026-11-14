@@ -396,16 +396,16 @@ const Rent: React.FC = () => {
             setAssignedKayaks(response.data.rentals);
             setShowPayment(false);
             
-            // Send the user to My Rentals, where the unlock buttons are
-            setTimeout(() => history.push('/account'), 100);
+            // Send the user to the rental page, where the unlock buttons are
+            setTimeout(() => history.push('/passcode'), 100);
         } catch (err) {
             console.error('Rental creation failed:', err);
             // Check if it's a network error vs actual failure
             if (err && typeof err === 'object' && 'response' in err) {
                 const error = err as any;
                 if (error.response?.status === 201 || error.response?.status === 200) {
-                    // Success response, just navigate to rentals
-                    setTimeout(() => history.push('/account'), 100);
+                    // Success response, just navigate to the rental page
+                    setTimeout(() => history.push('/passcode'), 100);
                     return;
                 }
             }
