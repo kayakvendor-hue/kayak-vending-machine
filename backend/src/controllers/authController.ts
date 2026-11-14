@@ -55,48 +55,6 @@ class AuthController {
         }
     }
 
-    async deleteAccount(req: AuthRequest, res: Response) {
-        try {
-            const userId = req.userId;
-            const { password } = req.body;
-
-            if (!password) {
-                return res.status(400).json({ success: false, message: 'Password is required to delete your account' });
-            }
-
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({ success: false, message: 'User not found' });
-            }
-
-            const isPasswordValid = await bcrypt.compare(String(password), user.password);
-            if (!isPasswordValid) {
-                return res.status(400).json({ success: false, message: 'Password is incorrect' });
-            }
-
-            // Mirrors the frontend's definition of an active rental (no return photo, not completed/cancelled)
-            const activeRentalCount = await Rental.countDocuments({
-                userId,
-                returnPhotoUrl: { $in: [null, ''] },
-                rentalStatus: { $nin: ['completed', 'cancelled'] }
-            });
-            if (activeRentalCount > 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'You have an active rental. Please return your kayak before deleting your account.'
-                });
-            }
-
-            // Removes only the login account. Rental and waiver records are kept for legal and financial
-            // history; the waiver stores its own copy of the renter's name, email, and signature.
-            await User.deleteOne({ _id: userId });
-
-            res.status(200).json({ success: true, message: 'Account deleted' });
-        } catch (err: any) {
-            res.status(500).json({ success: false, message: safeError(err, 'Failed to delete account') });
-        }
-    }
-
     async login(req: Request, res: Response) {
         try {
             const { error } = validateLogin(req.body);

@@ -13,10 +13,6 @@ const Profile: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [showDeleteForm, setShowDeleteForm] = useState(false);
-    const [deletePassword, setDeletePassword] = useState('');
-    const [deleteError, setDeleteError] = useState('');
-    const [deleting, setDeleting] = useState(false);
     const history = useHistory();
 
     useEffect(() => {
@@ -82,21 +78,6 @@ const Profile: React.FC = () => {
         window.dispatchEvent(new Event('auth-change'));
         
         history.push('/');
-    };
-
-    const handleDeleteAccount = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setDeleteError('');
-        setDeleting(true);
-        try {
-            await api.delete('/api/auth/account', { data: { password: deletePassword } });
-            ['token', 'user', 'isAdmin'].forEach((key) => localStorage.removeItem(key));
-            window.dispatchEvent(new Event('auth-change'));
-            window.location.href = '/login';
-        } catch (err: any) {
-            setDeleteError(err.response?.data?.message || 'Failed to delete account. Please try again.');
-            setDeleting(false);
-        }
     };
 
     if (loading) {
@@ -212,60 +193,6 @@ const Profile: React.FC = () => {
             >
                 Logout
             </button>
-
-            {/* Delete Account */}
-            <div style={{ marginTop: '2.5rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'center' }}>
-                {!showDeleteForm ? (
-                    <button
-                        type="button"
-                        onClick={() => setShowDeleteForm(true)}
-                        style={{ background: 'none', border: 'none', color: '#d32f2f', fontSize: '0.9rem', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-                    >
-                        Delete account
-                    </button>
-                ) : (
-                    <div style={{ textAlign: 'left', padding: '1.25rem', borderRadius: '8px', border: '2px solid #ef5350', backgroundColor: '#ffebee' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#b71c1c', fontSize: '1.1rem' }}>Delete your account?</h3>
-                        <p style={{ margin: '0 0 0.75rem 0', color: '#555', fontSize: '0.95rem' }}>
-                            Deleting your account permanently removes your login and personal details, including your name, email, and phone number. Your rental history is kept for our records.
-                        </p>
-                        <p style={{ margin: '0 0 1rem 0', color: '#555', fontSize: '0.95rem' }}>
-                            This cannot be undone. You can't delete your account while a kayak is checked out.
-                        </p>
-                        <form onSubmit={handleDeleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <label style={{ color: '#333', fontWeight: 'bold' }}>
-                                Enter your password to confirm
-                                <input
-                                    type="password"
-                                    value={deletePassword}
-                                    onChange={(e) => setDeletePassword(e.target.value)}
-                                    required
-                                    autoComplete="current-password"
-                                    style={{ display: 'block', width: '100%', marginTop: '0.5rem', padding: '0.5rem', fontSize: '1rem', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box' }}
-                                />
-                            </label>
-                            {deleteError && <p style={{ color: '#c62828', fontWeight: 'bold', margin: 0 }}>{deleteError}</p>}
-                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowDeleteForm(false); setDeletePassword(''); setDeleteError(''); }}
-                                    disabled={deleting}
-                                    style={{ flex: 1, backgroundColor: '#fff', color: '#333', border: '2px solid #757575', borderRadius: '4px', padding: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={deleting || !deletePassword}
-                                    style={{ flex: 1, backgroundColor: '#e53935', color: 'white', border: 'none', borderRadius: '4px', padding: '0.75rem', fontWeight: 'bold', cursor: deleting ? 'wait' : 'pointer', opacity: deletePassword ? 1 : 0.65 }}
-                                >
-                                    {deleting ? 'Deleting...' : 'Permanently delete account'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
-            </div>
         </div>
     );
 };
